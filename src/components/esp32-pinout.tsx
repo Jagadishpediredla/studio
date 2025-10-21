@@ -29,7 +29,7 @@ export default function Esp32Pinout({ className, ...props }: Esp32PinoutProps) {
           </DialogTrigger>
           <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle className="font-headline">ESP32 Pinout - Big View</DialogTitle>
+              <DialogTitle className="font-headline">ESP32 Pinout - Detailed View</DialogTitle>
             </DialogHeader>
             <div className="flex-grow min-h-0">
               <ScrollArea className="h-full w-full">
@@ -39,10 +39,8 @@ export default function Esp32Pinout({ className, ...props }: Esp32PinoutProps) {
           </DialogContent>
         </Dialog>
       </CardHeader>
-      <CardContent className="flex-grow flex items-center justify-center min-h-0">
-        <ScrollArea className="h-full w-full">
-          <ESP32Svg className="w-full h-auto" />
-        </ScrollArea>
+      <CardContent className="flex-grow flex items-center justify-center min-h-0 p-2">
+        <ESP32Svg className="w-full h-full object-contain" />
       </CardContent>
     </Card>
   );

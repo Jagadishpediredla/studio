@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
 import { generateTechnicalAnalysisReport } from '@/ai/flows/generate-technical-analysis-report';
@@ -60,13 +60,32 @@ export default function Home() {
     setPipelineStatus(prev => ({ ...prev, [step]: status }));
   };
 
+  const runPipelineStep = (step: keyof Omit<PipelineStatus, 'codeGen'>): Promise<boolean> => {
+    return new Promise((resolve) => {
+      updatePipeline(step, 'processing');
+      const duration = 1500 + Math.random() * 1500;
+      setTimeout(() => {
+        const success = Math.random() > 0.2; // 80% success rate
+        if (success) {
+          updatePipeline(step, 'completed');
+          toast({ title: 'Success', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step completed.` });
+          resolve(true);
+        } else {
+          updatePipeline(step, 'failed');
+          toast({ title: 'Failed', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step failed.`, variant: 'destructive' });
+          resolve(false);
+        }
+      }, duration);
+    });
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast({ title: 'Error', description: 'Prompt cannot be empty.', variant: 'destructive' });
       return;
     }
     setIsGenerating(true);
-    updatePipeline('codeGen', 'processing');
+    setPipelineStatus({ codeGen: 'processing', compile: 'pending', upload: 'pending', verify: 'pending' });
 
     const currentHistoryItem: HistoryItem = { id: crypto.randomUUID(), code, board: boardInfo, explanation, visualizerCode, timestamp: new Date() };
     setHistory(prev => [currentHistoryItem, ...prev]);
@@ -86,36 +105,37 @@ export default function Home() {
       setVisualizerCode(newVisualizerCode);
       
       updatePipeline('codeGen', 'completed');
-      toast({ title: 'Success', description: 'New code generated and analyzed.' });
+      toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
 
-    } catch (error) {
+      // Start automated pipeline
+      const compileSuccess = await runPipelineStep('compile');
+      if (!compileSuccess) throw new Error('Compilation failed.');
+
+      const uploadSuccess = await runPipelineStep('upload');
+      if (!uploadSuccess) throw new Error('Upload failed.');
+
+      await runPipelineStep('verify');
+
+    } catch (error: any) {
       console.error(error);
-      toast({ title: 'AI Generation Failed', description: 'Could not generate code from the prompt.', variant: 'destructive' });
-      updatePipeline('codeGen', 'failed');
-      setHistory(prev => prev.slice(1)); // Revert history
+      const message = error.message || 'An error occurred during the pipeline.';
+      if (!message.includes('failed')) { // Avoid duplicate toasts for failed steps
+        toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });
+      }
+      if (pipelineStatus.codeGen !== 'completed') {
+        updatePipeline('codeGen', 'failed');
+        setHistory(prev => prev.slice(1)); // Revert history only if code gen failed
+      }
     } finally {
       setIsGenerating(false);
-      // Reset subsequent pipeline steps
-      updatePipeline('compile', 'pending');
-      updatePipeline('upload', 'pending');
-      updatePipeline('verify', 'pending');
     }
   };
 
-  const handleCompile = (step: keyof Omit<PipelineStatus, 'codeGen'>) => {
-    updatePipeline(step, 'processing');
-    const duration = 2000 + Math.random() * 2000;
-    setTimeout(() => {
-      const success = Math.random() > 0.2; // 80% success rate
-      if (success) {
-        updatePipeline(step, 'completed');
-        toast({ title: 'Success', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step completed.` });
-      } else {
-        updatePipeline(step, 'failed');
-        toast({ title: 'Failed', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step failed.`, variant: 'destructive' });
-      }
-    }, duration);
-  };
+  const handleManualCompile = async (step: keyof Omit<PipelineStatus, 'codeGen'>) => {
+    setIsGenerating(true);
+    await runPipelineStep(step);
+    setIsGenerating(false);
+  }
   
   const handleRestoreFromHistory = (item: HistoryItem) => {
     setCode(item.code);
@@ -140,42 +160,44 @@ export default function Home() {
   };
 
   return (
-    <main className="grid h-screen w-screen grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4">
-      <AppHeader 
-        pipelineStatus={pipelineStatus} 
-        onCompile={handleCompile}
-        className="col-span-3" 
-      />
-      
-      <div className="row-start-2 flex h-full flex-col gap-4 overflow-hidden">
-        <AiControls 
-          prompt={prompt} 
-          setPrompt={setPrompt} 
-          onGenerate={handleGenerate} 
-          isGenerating={isGenerating} 
+    <div className="h-screen w-screen bg-background text-foreground overflow-hidden">
+      <main className="grid h-full w-full grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4">
+        <AppHeader 
+          pipelineStatus={pipelineStatus} 
+          onCompile={handleManualCompile}
+          className="col-span-3" 
         />
-        <Esp32Pinout className="flex-grow min-h-0" />
-      </div>
+        
+        <div className="row-start-2 flex h-full flex-col gap-4 overflow-hidden">
+          <AiControls 
+            prompt={prompt} 
+            setPrompt={setPrompt} 
+            onGenerate={handleGenerate} 
+            isGenerating={isGenerating} 
+          />
+          <Esp32Pinout className="flex-grow min-h-0" />
+        </div>
 
-      <CodeEditorPanel
-        className="row-start-2 flex flex-col h-full min-h-0"
-        code={code}
-        setCode={setCode}
-        boardInfo={boardInfo}
-      />
-      
-      <IntelligencePanel
-        className="row-start-2 flex flex-col h-full min-h-0"
-        visualizerCode={visualizerCode}
-        explanation={explanation}
-        history={history}
-        onRestore={handleRestoreFromHistory}
-        sensorData={sensorData}
-        setSensorData={setSensorData}
-        technicalReport={technicalReport}
-        onGenerateReport={handleGenerateReport}
-        isAnalyzing={isAnalyzing}
-      />
-    </main>
+        <CodeEditorPanel
+          className="row-start-2 flex flex-col h-full min-h-0"
+          code={code}
+          setCode={setCode}
+          boardInfo={boardInfo}
+        />
+        
+        <IntelligencePanel
+          className="row-start-2 flex flex-col h-full min-h-0"
+          visualizerCode={visualizerCode}
+          explanation={explanation}
+          history={history}
+          onRestore={handleRestoreFromHistory}
+          sensorData={sensorData}
+          setSensorData={setSensorData}
+          technicalReport={technicalReport}
+          onGenerateReport={handleGenerateReport}
+          isAnalyzing={isAnalyzing}
+        />
+      </main>
+    </div>
   );
 }
