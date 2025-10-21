@@ -1,12 +1,14 @@
 "use client";
 
-import type * as React from 'react';
+import * as React from 'react';
+import { useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Code, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BoardInfo } from "@/lib/types";
 import AceEditor from "react-ace";
+import type { IAceEditor } from "react-ace/lib/types";
 
 import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/theme-tomorrow_night";
@@ -20,6 +22,16 @@ interface CodeEditorPanelProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export default function CodeEditorPanel({ code, onCodeChange, boardInfo, className, ...props }: CodeEditorPanelProps) {
+  const editorRef = useRef<IAceEditor | null>(null);
+
+  useEffect(() => {
+    // On mount or when code changes, force the editor to resize.
+    // This fixes the single-line rendering bug on large screens.
+    if (editorRef.current) {
+      editorRef.current.editor.resize();
+    }
+  }, [code]);
+
   return (
     <Card className={cn("flex flex-col", className)} {...props}>
       <CardHeader>
@@ -43,6 +55,7 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo, classNa
       </CardHeader>
       <CardContent className="flex-grow min-h-0 p-0">
           <AceEditor
+            ref={editorRef as React.RefObject<AceEditor>}
             mode="c_cpp"
             theme="tomorrow_night"
             onChange={onCodeChange}
