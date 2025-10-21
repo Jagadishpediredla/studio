@@ -45,9 +45,16 @@ export async function compileCode(payload: CompilePayload) {
         contentType: firmwareBlob.type || 'application/octet-stream' 
       };
     } else {
-      const errorData = await response.json();
-      // Ensure a consistent error format
-      const errorMessage = errorData.error || 'An unknown compilation error occurred.';
+      let errorData;
+      let errorMessage;
+      try {
+        errorData = await response.json();
+        errorMessage = errorData.error || 'An unknown compilation error occurred.';
+      } catch (e) {
+        // If the response is not JSON, use the raw text as the error.
+        errorMessage = await response.text();
+        errorData = { statusUpdates: [errorMessage] };
+      }
       return { success: false, error: errorMessage, statusUpdates: errorData.statusUpdates || [] };
     }
   } catch (error: any) {
