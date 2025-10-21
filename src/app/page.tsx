@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep } from '@/lib/types';
@@ -25,8 +25,6 @@ void loop() {
   // put your main code here, to run repeatedly:
   delay(1000);
 }`;
-
-const initialExplanation = "This is a basic Arduino sketch. The `setup()` function runs once at the beginning to initialize serial communication. The `loop()` function runs repeatedly, doing nothing but waiting for one second in each iteration. Use the AI controls to generate more complex code.";
 
 const initialVisualizerHtml = `
 <body class="bg-gray-900 text-gray-100 flex items-center justify-center h-full font-sans">
