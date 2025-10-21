@@ -37,7 +37,7 @@ export default function CodeEditorPanel({ code, setCode, boardInfo, className, .
             </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-grow min-h-0 pb-0">
+      <CardContent className="flex-grow min-h-0">
         <ScrollArea className="h-full w-full rounded-md border">
           <Textarea
             value={code}

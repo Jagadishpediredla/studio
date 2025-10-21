@@ -102,7 +102,7 @@ export default function Home() {
     }
   };
 
-  const handleCompile = (step: keyof PipelineStatus) => {
+  const handleCompile = (step: keyof Omit<PipelineStatus, 'codeGen'>) => {
     updatePipeline(step, 'processing');
     const duration = 2000 + Math.random() * 2000;
     setTimeout(() => {
@@ -140,7 +140,7 @@ export default function Home() {
   };
 
   return (
-    <main className="grid h-screen max-h-screen w-full grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 overflow-hidden p-4 bg-background">
+    <main className="grid h-screen w-screen grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4">
       <AppHeader 
         pipelineStatus={pipelineStatus} 
         onCompile={handleCompile}
