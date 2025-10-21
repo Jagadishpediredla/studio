@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
-import { compileCode } from '@/app/actions';
+import { compileCode, getCompilationStatus } from '@/app/actions';
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep } from '@/lib/types';
 
 import AppHeader from '@/components/app-header';
@@ -62,22 +62,55 @@ export default function Home() {
     verify: 'pending',
   });
   const [isGenerating, setIsGenerating] = useState(false);
+  const [compilationStatus, setCompilationStatus] = useState<string[]>([]);
   const { toast } = useToast();
+  const statusIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const updatePipeline = (step: keyof PipelineStatus, status: PipelineStep) => {
     setPipelineStatus(prev => ({ ...prev, [step]: status }));
   };
 
+  const stopStatusPolling = () => {
+    if (statusIntervalRef.current) {
+      clearInterval(statusIntervalRef.current);
+      statusIntervalRef.current = null;
+    }
+  };
+
+  const startStatusPolling = () => {
+    stopStatusPolling();
+    setCompilationStatus([]);
+    statusIntervalRef.current = setInterval(async () => {
+      const statusRes = await getCompilationStatus();
+      if (statusRes.success && statusRes.message) {
+        setCompilationStatus(prev => {
+          const newStatus = statusRes.message as string;
+          if (prev.at(-1) !== newStatus) {
+            return [...prev, newStatus];
+          }
+          return prev;
+        });
+      }
+    }, 2000);
+  };
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => stopStatusPolling();
+  }, []);
+
   const runCompileStep = async (): Promise<boolean> => {
     updatePipeline('compile', 'processing');
+    startStatusPolling();
     
     const result = await compileCode({ code, board: boardInfo });
+    stopStatusPolling();
 
     if (result.success && result.firmware) {
       updatePipeline('compile', 'completed');
       toast({ title: 'Success', description: 'Firmware compiled successfully.' });
+      setCompilationStatus(prev => [...prev, 'Compilation successful. Firmware is ready for download.']);
       
-      // Create a downloadable link for the firmware
       const byteCharacters = atob(result.firmware);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -95,6 +128,8 @@ export default function Home() {
       return true;
     } else {
       updatePipeline('compile', 'failed');
+      const finalStatus = result.statusUpdates || [];
+      setCompilationStatus(finalStatus);
       const errorDescription = (
         <div>
             <p className="font-semibold">Compilation failed. See details below:</p>
@@ -133,6 +168,7 @@ export default function Home() {
     }
     setIsGenerating(true);
     setPipelineStatus({ codeGen: 'processing', compile: 'pending', upload: 'pending', verify: 'pending' });
+    setCompilationStatus([]);
 
     const currentHistoryItem: HistoryItem = { id: crypto.randomUUID(), code, board: boardInfo, visualizerHtml: visualizerHtml, timestamp: new Date(), prompt };
     setHistory(prev => [currentHistoryItem, ...prev]);
@@ -143,15 +179,17 @@ export default function Home() {
       setCode(newCode);
       const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
       setBoardInfo(newBoardInfo);
-      
-      const { html: newVisualizerHtml } = await generateVisualExplanation({ code: newCode });
-      setVisualizerHtml(newVisualizerHtml);
-      
       updatePipeline('codeGen', 'completed');
+      
+      const visPromise = generateVisualExplanation({ code: newCode }).then(({ html: newVisualizerHtml }) => {
+        setVisualizerHtml(newVisualizerHtml);
+      });
+      
       toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
 
       // Start automated pipeline
       const compileSuccess = await runCompileStep();
+      await visPromise; // Wait for visualizer to finish
       if (!compileSuccess) throw new Error('Compilation failed.');
 
       const uploadSuccess = await runPlaceholderStep('upload');
@@ -171,6 +209,7 @@ export default function Home() {
       }
     } finally {
       setIsGenerating(false);
+      stopStatusPolling();
     }
   };
   
@@ -206,11 +245,12 @@ export default function Home() {
   }
 
   return (
-    <div className="h-screen w-screen bg-background text-foreground flex flex-col">
+    <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
       <main className="grid flex-grow grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4 overflow-hidden">
         <AppHeader 
-          pipelineStatus={pipelineStatus} 
-          onCompile={handleManualAction}
+          pipelineStatus={pipelineStatus}
+          compilationStatus={compilationStatus}
+          onManualAction={handleManualAction}
           onShowHistory={() => setIsHistoryOpen(true)}
           className="col-span-3" 
         />
@@ -228,7 +268,7 @@ export default function Home() {
         <CodeEditorPanel
           className="row-start-2 flex flex-col h-full min-h-0"
           code={code}
-          setCode={setCode}
+          onCodeChange={setCode}
           boardInfo={boardInfo}
         />
         

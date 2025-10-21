@@ -41,3 +41,16 @@ export async function compileCode(payload: CompilePayload) {
     return { success: false, error: `Failed to connect to the compilation server. Is it running? Error: ${error.message}` };
   }
 }
+
+export async function getCompilationStatus() {
+    try {
+        const response = await fetch('http://localhost:3000/status');
+        if (response.ok) {
+            const data = await response.json();
+            return { success: true, ...data };
+        }
+        return { success: false, message: 'Could not fetch status.' };
+    } catch (error: any) {
+        return { success: false, message: 'Server not available.' };
+    }
+}

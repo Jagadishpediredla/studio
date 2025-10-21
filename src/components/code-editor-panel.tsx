@@ -15,11 +15,11 @@ import "ace-builds/src-noconflict/ext-language_tools";
 
 interface CodeEditorPanelProps extends React.HTMLAttributes<HTMLDivElement> {
   code: string;
-  setCode: (code: string) => void;
+  onCodeChange: (code: string) => void;
   boardInfo: BoardInfo;
 }
 
-export default function CodeEditorPanel({ code, setCode, boardInfo, className, ...props }: CodeEditorPanelProps) {
+export default function CodeEditorPanel({ code, onCodeChange, boardInfo, className, ...props }: CodeEditorPanelProps) {
   return (
     <Card className={cn("flex flex-col", className)} {...props}>
       <CardHeader>
@@ -45,7 +45,7 @@ export default function CodeEditorPanel({ code, setCode, boardInfo, className, .
           <AceEditor
             mode="c_cpp"
             theme="tomorrow_night"
-            onChange={setCode}
+            onChange={onCodeChange}
             value={code}
             name="CODE_EDITOR"
             editorProps={{ $blockScrolling: true }}
