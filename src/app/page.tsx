@@ -190,7 +190,11 @@ export default function Home() {
       // Start automated pipeline
       const compileSuccess = await runCompileStep();
       await visPromise; // Wait for visualizer to finish
-      if (!compileSuccess) throw new Error('Compilation failed.');
+      if (!compileSuccess) {
+        // The compilation failed. The error is already handled in runCompileStep.
+        // We just need to stop the pipeline execution here.
+        return;
+      }
 
       const uploadSuccess = await runPlaceholderStep('upload');
       if (!uploadSuccess) throw new Error('Upload failed.');
