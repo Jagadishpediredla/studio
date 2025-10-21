@@ -249,7 +249,6 @@ export default function Home() {
       <main className="grid flex-grow grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4 overflow-hidden">
         <AppHeader 
           pipelineStatus={pipelineStatus}
-          compilationStatus={compilationStatus}
           onManualAction={handleManualAction}
           onShowHistory={() => setIsHistoryOpen(true)}
           className="col-span-3" 
@@ -275,6 +274,7 @@ export default function Home() {
         <IntelligencePanel
           className="row-start-2 flex flex-col h-full min-h-0"
           visualizerHtml={visualizerHtml}
+          compilationStatus={compilationStatus}
         />
       </main>
       <HistorySheet 

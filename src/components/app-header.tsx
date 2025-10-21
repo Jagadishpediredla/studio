@@ -10,12 +10,11 @@ import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History } from "lucid
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   pipelineStatus: PipelineStatus;
-  compilationStatus: string[];
   onManualAction: (step: keyof Omit<PipelineStatus, 'codeGen'>) => void;
   onShowHistory: () => void;
 }
 
-export default function AppHeader({ pipelineStatus, compilationStatus, onManualAction, onShowHistory, className, ...props }: AppHeaderProps) {
+export default function AppHeader({ pipelineStatus, onManualAction, onShowHistory, className, ...props }: AppHeaderProps) {
   const isActionInProgress = Object.values(pipelineStatus).some(status => status === 'processing');
 
   return (
@@ -106,7 +105,7 @@ export default function AppHeader({ pipelineStatus, compilationStatus, onManualA
             </DropdownMenu>
         </div>
       </div>
-      <DeploymentPipeline status={pipelineStatus} compilationStatus={compilationStatus} />
+      <DeploymentPipeline status={pipelineStatus} />
     </header>
   );
 }

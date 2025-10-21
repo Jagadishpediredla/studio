@@ -1,15 +1,13 @@
 "use client";
 
 import * as React from 'react';
-import { Wand2, Cog, UploadCloud, ShieldCheck, ChevronRight, Loader, XCircle, CheckCircle2, Terminal } from "lucide-react";
+import { Wand2, Cog, UploadCloud, ShieldCheck, ChevronRight, Loader, XCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus, PipelineStep } from "@/lib/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface DeploymentPipelineProps {
   status: PipelineStatus;
-  compilationStatus: string[];
 }
 
 const stepConfig = {
@@ -26,19 +24,11 @@ const statusConfig: { [key in PipelineStep]: { icon: React.ElementType, color: s
   failed: { icon: XCircle, color: "text-red-500" },
 };
 
-export default function DeploymentPipeline({ status, compilationStatus }: DeploymentPipelineProps) {
+export default function DeploymentPipeline({ status }: DeploymentPipelineProps) {
   const steps = Object.keys(status) as Array<keyof PipelineStatus>;
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (scrollRef.current) {
-        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-    }
-  }, [compilationStatus]);
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 rounded-lg border bg-background p-2">
             {steps.map((stepKey, index) => {
             const stepStatus = status[stepKey];
@@ -66,23 +56,6 @@ export default function DeploymentPipeline({ status, compilationStatus }: Deploy
             );
             })}
         </div>
-        
-        {compilationStatus.length > 0 && (
-            <div className="bg-black/50 rounded-lg p-2 max-h-32">
-                 <div className='flex items-center gap-2 text-sm font-medium text-muted-foreground p-1'>
-                    <Terminal className="h-4 w-4" />
-                    <span>Compilation Status</span>
-                 </div>
-                 <ScrollArea className="h-20 w-full rounded-md border border-input bg-background/50 p-2">
-                    <div ref={scrollRef} className="text-xs font-mono text-muted-foreground flex flex-col gap-1">
-                        {compilationStatus.map((line, index) => (
-                            <p key={index}>{`> ${line}`}</p>
-                        ))}
-                    </div>
-                </ScrollArea>
-            </div>
-        )}
-      </div>
     </TooltipProvider>
   );
 }
