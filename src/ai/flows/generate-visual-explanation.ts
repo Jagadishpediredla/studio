@@ -41,17 +41,18 @@ Generate a self-contained HTML document that visually explains the provided Ardu
 **Requirements:**
 1.  **HTML Structure:** The output MUST be a valid HTML snippet containing only the content for the <body> tag. Do not include <html>, <head>, or <style> tags.
 2.  **Styling:** Use Tailwind CSS classes directly in the HTML for all styling. Assume Tailwind is available. The design should be modern, clean, and optimized for a dark theme (e.g., dark backgrounds like \`bg-gray-900\`, light text \`text-gray-100\`, and accent colors like \`text-blue-400\`).
-3.  **Content:**
-    *   Clearly identify the main parts of the code (\`setup()\` and \`loop()\`).
-    *   Use cards, flowcharts, or diagrams to represent the logic.
-    *   Highlight key functions, variables, and pin numbers.
-    *   Provide concise explanations for each logical step.
-    *   Make it look like a professional, high-quality technical diagram.
+3.  **Visual First:** Prioritize visual elements over text. Use flowcharts, diagrams, and icons to represent logic. Keep text concise. Use SVG icons for clarity (e.g., for pins, LEDs, delays).
+4.  **Content:**
+    *   Create a clear flowchart for the \`setup()\` and \`loop()\` functions.
+    *   Use cards with icons to represent hardware components (like LEDs or sensors) and key actions (like \`delay()\`).
+    *   Highlight pin numbers and their modes (INPUT/OUTPUT) visually.
+    *   Connect logical steps with arrows to show the flow of execution.
+    *   The final output should look like a professional, high-quality technical infographic.
 
 **Example of a good explanation for a simple blink sketch:**
 A main container with a title. Two columns or sections, one for \`setup()\` and one for \`loop()\`.
-- The \`setup()\` section would have a card saying "Pin 13 set to OUTPUT".
-- The \`loop()\` section would show a sequence: a card for "Turn LED ON (Pin 13 HIGH)", an arrow, a card for "Wait 1000ms", an arrow, a card for "Turn LED OFF (Pin 13 LOW)", and so on.
+- The \`setup()\` section would have a card with a gear icon: "Initialize Pin 13 as OUTPUT".
+- The \`loop()\` section would show a flowchart sequence: A card with a lightbulb-on icon for "Turn LED ON (Pin 13 HIGH)", an arrow, a card with a clock icon for "Wait 1000ms", an arrow, a card with a lightbulb-off icon for "Turn LED OFF (Pin 13 LOW)", and an arrow pointing back to the start of the loop.
 
 Code to explain:
 \`\`\`arduino
