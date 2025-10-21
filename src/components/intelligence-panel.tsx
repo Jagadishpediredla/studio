@@ -43,7 +43,7 @@ export default function IntelligencePanel({
       </CardHeader>
       <CardContent className="flex-grow min-h-0">
         <Tabs defaultValue="explanation" className="h-full flex flex-col">
-          <TabsList>
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="explanation"><BookText className="w-4 h-4 mr-2"/>Explanation</TabsTrigger>
             <TabsTrigger value="visualizer"><Share2 className="w-4 h-4 mr-2"/>Visualizer</TabsTrigger>
             <TabsTrigger value="history"><History className="w-4 h-4 mr-2"/>History</TabsTrigger>
