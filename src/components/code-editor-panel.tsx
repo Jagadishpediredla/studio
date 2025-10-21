@@ -2,12 +2,16 @@
 
 import type * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Code, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BoardInfo } from "@/lib/types";
+import AceEditor from "react-ace";
+
+import "ace-builds/src-noconflict/mode-c_cpp";
+import "ace-builds/src-noconflict/theme-tomorrow_night";
+import "ace-builds/src-noconflict/ext-language_tools";
+
 
 interface CodeEditorPanelProps extends React.HTMLAttributes<HTMLDivElement> {
   code: string;
@@ -37,15 +41,29 @@ export default function CodeEditorPanel({ code, setCode, boardInfo, className, .
             </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-grow min-h-0">
-        <ScrollArea className="h-full w-full rounded-md border">
-          <Textarea
+      <CardContent className="flex-grow min-h-0 p-0">
+          <AceEditor
+            mode="c_cpp"
+            theme="tomorrow_night"
+            onChange={setCode}
             value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="h-full w-full font-code text-base !border-0 !ring-0 focus-visible:!ring-0 resize-none"
-            placeholder="Generated code will appear here..."
+            name="CODE_EDITOR"
+            editorProps={{ $blockScrolling: true }}
+            setOptions={{
+              enableBasicAutocompletion: true,
+              enableLiveAutocompletion: true,
+              enableSnippets: true,
+              showLineNumbers: true,
+              tabSize: 2,
+            }}
+            fontSize={16}
+            showPrintMargin={false}
+            showGutter={true}
+            highlightActiveLine={true}
+            width="100%"
+            height="100%"
+            className="font-code"
           />
-        </ScrollArea>
       </CardContent>
     </Card>
   );
