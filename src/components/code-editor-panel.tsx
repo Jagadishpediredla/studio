@@ -43,6 +43,7 @@ export default function CodeEditorPanel({ code, setCode, boardInfo, className, .
       </CardHeader>
       <CardContent className="flex-grow min-h-0 p-0">
           <AceEditor
+            key={code}
             mode="c_cpp"
             theme="tomorrow_night"
             onChange={setCode}
