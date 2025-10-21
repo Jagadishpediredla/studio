@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
+import { compileCode } from '@/app/actions';
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep } from '@/lib/types';
 
 import AppHeader from '@/components/app-header';
@@ -46,7 +47,6 @@ const initialVisualizerHtml = `
 </body>
 `;
 
-
 export default function Home() {
   const [prompt, setPrompt] = useState<string>('Blink an LED on pin 13');
   const [code, setCode] = useState<string>(initialCode);
@@ -68,24 +68,63 @@ export default function Home() {
     setPipelineStatus(prev => ({ ...prev, [step]: status }));
   };
 
-  const runPipelineStep = (step: keyof Omit<PipelineStatus, 'codeGen'>): Promise<boolean> => {
+  const runCompileStep = async (): Promise<boolean> => {
+    updatePipeline('compile', 'processing');
+    
+    const result = await compileCode({ code, board: boardInfo });
+
+    if (result.success && result.firmware) {
+      updatePipeline('compile', 'completed');
+      toast({ title: 'Success', description: 'Firmware compiled successfully.' });
+      
+      // Create a downloadable link for the firmware
+      const byteCharacters = atob(result.firmware);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: result.contentType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `firmware-${new Date().getTime()}.bin`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      return true;
+    } else {
+      updatePipeline('compile', 'failed');
+      const errorDescription = (
+        <div>
+            <p className="font-semibold">Compilation failed. See details below:</p>
+            <pre className="mt-2 w-full rounded-md bg-destructive/20 p-4 text-destructive-foreground whitespace-pre-wrap font-code text-xs">
+                {result.error}
+            </pre>
+        </div>
+      );
+      toast({ 
+        title: 'Compilation Failed', 
+        description: errorDescription, 
+        variant: 'destructive',
+        duration: 20000,
+      });
+      return false;
+    }
+  };
+  
+  const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile'>): Promise<boolean> => {
     return new Promise((resolve) => {
       updatePipeline(step, 'processing');
-      const duration = 1500 + Math.random() * 1500;
+      const duration = 1500 + Math.random() * 1000;
       setTimeout(() => {
-        const success = Math.random() > 0.2; // 80% success rate
-        if (success) {
-          updatePipeline(step, 'completed');
-          toast({ title: 'Success', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step completed.` });
-          resolve(true);
-        } else {
-          updatePipeline(step, 'failed');
-          toast({ title: 'Failed', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step failed.`, variant: 'destructive' });
-          resolve(false);
-        }
+        updatePipeline(step, 'completed');
+        toast({ title: 'Step Complete', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step is simulated.` });
+        resolve(true);
       }, duration);
     });
   };
+
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -112,13 +151,13 @@ export default function Home() {
       toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
 
       // Start automated pipeline
-      const compileSuccess = await runPipelineStep('compile');
+      const compileSuccess = await runCompileStep();
       if (!compileSuccess) throw new Error('Compilation failed.');
 
-      const uploadSuccess = await runPipelineStep('upload');
+      const uploadSuccess = await runPlaceholderStep('upload');
       if (!uploadSuccess) throw new Error('Upload failed.');
 
-      await runPipelineStep('verify');
+      await runPlaceholderStep('verify');
 
     } catch (error: any) {
       console.error(error);
@@ -134,13 +173,18 @@ export default function Home() {
       setIsGenerating(false);
     }
   };
-
-  const handleManualCompile = async (step: keyof Omit<PipelineStatus, 'codeGen'>) => {
+  
+  const handleManualAction = async (step: keyof Omit<PipelineStatus, 'codeGen'>) => {
     setIsGenerating(true);
-    await runPipelineStep(step);
+    let success = false;
+    if (step === 'compile') {
+      success = await runCompileStep();
+    } else {
+      success = await runPlaceholderStep(step);
+    }
     setIsGenerating(false);
   }
-  
+
   const handleRestoreFromHistory = (item: HistoryItem) => {
     setCode(item.code);
     setBoardInfo(item.board);
@@ -166,7 +210,7 @@ export default function Home() {
       <main className="grid flex-grow grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4 overflow-hidden">
         <AppHeader 
           pipelineStatus={pipelineStatus} 
-          onCompile={handleManualCompile}
+          onCompile={handleManualAction}
           onShowHistory={() => setIsHistoryOpen(true)}
           className="col-span-3" 
         />
