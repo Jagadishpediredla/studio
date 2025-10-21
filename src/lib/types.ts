@@ -16,7 +16,7 @@ export type HistoryItem = {
   id: string;
   code: string;
   board: BoardInfo;
-  explanation: string;
-  visualizerCode: string;
+  prompt: string;
+  visualizerHtml: string;
   timestamp: Date;
 };

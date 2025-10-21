@@ -5,15 +5,16 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "@/components/ui/button";
 import DeploymentPipeline from "@/components/deployment-pipeline";
 import { cn } from "@/lib/utils";
-import type { PipelineStatus, PipelineStep } from "@/lib/types";
-import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi } from "lucide-react";
+import type { PipelineStatus } from "@/lib/types";
+import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History } from "lucide-react";
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   pipelineStatus: PipelineStatus;
   onCompile: (step: keyof Omit<PipelineStatus, 'codeGen'>) => void;
+  onShowHistory: () => void;
 }
 
-export default function AppHeader({ pipelineStatus, onCompile, className, ...props }: AppHeaderProps) {
+export default function AppHeader({ pipelineStatus, onCompile, onShowHistory, className, ...props }: AppHeaderProps) {
   const isActionInProgress = Object.values(pipelineStatus).some(status => status === 'processing');
 
   return (
@@ -77,6 +78,10 @@ export default function AppHeader({ pipelineStatus, onCompile, className, ...pro
         <DeploymentPipeline status={pipelineStatus} />
       </div>
       <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={onShowHistory}>
+            <History className="mr-2 h-4 w-4" />
+            Version History
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" disabled={isActionInProgress}>
@@ -93,7 +98,7 @@ export default function AppHeader({ pipelineStatus, onCompile, className, ...pro
             <DropdownMenuItem onClick={() => onCompile('verify')} disabled={isActionInProgress}>
               <ShieldCheck className="mr-2 h-4 w-4" /> Verify on Device
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={isActionInProgress}>
+            <DropdownMenuItem disabled>
               <Wifi className="mr-2 h-4 w-4" /> Send OTA Update
             </DropdownMenuItem>
           </DropdownMenuContent>

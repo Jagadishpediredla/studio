@@ -3,8 +3,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
-import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
-import { generateTechnicalAnalysisReport } from '@/ai/flows/generate-technical-analysis-report';
+import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep } from '@/lib/types';
 
 import AppHeader from '@/components/app-header';
@@ -13,6 +12,7 @@ import Esp32Pinout from '@/components/esp32-pinout';
 import CodeEditorPanel from '@/components/code-editor-panel';
 import IntelligencePanel from '@/components/intelligence-panel';
 import { useToast } from '@/hooks/use-toast';
+import { HistorySheet } from '@/components/history-sheet';
 
 const initialCode = `// Use the AI Controls to generate code for your ESP32
 void setup() {
@@ -28,23 +28,34 @@ void loop() {
 
 const initialExplanation = "This is a basic Arduino sketch. The `setup()` function runs once at the beginning to initialize serial communication. The `loop()` function runs repeatedly, doing nothing but waiting for one second in each iteration. Use the AI controls to generate more complex code.";
 
-const initialVisualizerCode = `graph TD
-    A[Start] --> B{setup()};
-    B --> C[Serial.begin(115200)];
-    C --> D[Serial.println("Hello, ESP32!")];
-    D --> E{loop()};
-    E --> F[delay(1000)];
-    F --> E;`;
+const initialVisualizerHtml = `
+<body class="bg-gray-900 text-gray-100 flex items-center justify-center h-full font-sans">
+  <div class="text-center p-8 rounded-lg bg-gray-800 shadow-xl">
+    <h1 class="text-3xl font-bold text-blue-400 mb-4">Initial Sketch</h1>
+    <p class="text-lg">This is a basic Arduino sketch.</p>
+    <div class="mt-6 text-left space-y-4">
+        <div class="p-4 bg-gray-700 rounded-lg">
+            <h2 class="font-semibold text-xl text-green-400">setup()</h2>
+            <p>Runs once to initialize serial communication at 115200 bps.</p>
+        </div>
+        <div class="p-4 bg-gray-700 rounded-lg">
+            <h2 class="font-semibold text-xl text-yellow-400">loop()</h2>
+            <p>Runs repeatedly, pausing for 1 second in each iteration.</p>
+        </div>
+    </div>
+    <p class="mt-8 text-sm text-gray-400">Use the AI controls to generate more complex code.</p>
+  </div>
+</body>
+`;
+
 
 export default function Home() {
   const [prompt, setPrompt] = useState<string>('Blink an LED on pin 13');
   const [code, setCode] = useState<string>(initialCode);
   const [boardInfo, setBoardInfo] = useState<BoardInfo>({ fqbn: 'esp32:esp32:esp32', libraries: [] });
-  const [explanation, setExplanation] = useState<string>(initialExplanation);
-  const [visualizerCode, setVisualizerCode] = useState<string>(initialVisualizerCode);
+  const [visualizerHtml, setVisualizerHtml] = useState<string>(initialVisualizerHtml);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [sensorData, setSensorData] = useState<string>('Water sensor reading: 850');
-  const [technicalReport, setTechnicalReport] = useState<string>('');
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({
     codeGen: 'pending',
@@ -53,7 +64,6 @@ export default function Home() {
     verify: 'pending',
   });
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { toast } = useToast();
 
   const updatePipeline = (step: keyof PipelineStatus, status: PipelineStep) => {
@@ -87,7 +97,7 @@ export default function Home() {
     setIsGenerating(true);
     setPipelineStatus({ codeGen: 'processing', compile: 'pending', upload: 'pending', verify: 'pending' });
 
-    const currentHistoryItem: HistoryItem = { id: crypto.randomUUID(), code, board: boardInfo, explanation, visualizerCode, timestamp: new Date() };
+    const currentHistoryItem: HistoryItem = { id: crypto.randomUUID(), code, board: boardInfo, visualizerHtml: visualizerHtml, timestamp: new Date(), prompt };
     setHistory(prev => [currentHistoryItem, ...prev]);
 
     try {
@@ -97,12 +107,8 @@ export default function Home() {
       const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
       setBoardInfo(newBoardInfo);
       
-      const { explanation: newExplanation } = await analyzeCodeForExplanation({ code: newCode });
-      setExplanation(newExplanation);
-
-      // Placeholder for visualizer generation
-      const newVisualizerCode = `graph TD\nA[Start] --> B["${prompt.substring(0, 30)}..."];\nB --> C{Generated Logic};`;
-      setVisualizerCode(newVisualizerCode);
+      const { html: newVisualizerHtml } = await generateVisualExplanation({ code: newCode });
+      setVisualizerHtml(newVisualizerHtml);
       
       updatePipeline('codeGen', 'completed');
       toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
@@ -140,31 +146,30 @@ export default function Home() {
   const handleRestoreFromHistory = (item: HistoryItem) => {
     setCode(item.code);
     setBoardInfo(item.board);
-    setExplanation(item.explanation);
-    setVisualizerCode(item.visualizerCode);
+    setVisualizerHtml(item.visualizerHtml);
+    setPrompt(item.prompt);
+    setIsHistoryOpen(false);
     toast({ title: 'Restored', description: `Restored code from ${item.timestamp.toLocaleTimeString()}` });
   };
   
-  const handleGenerateReport = async () => {
-    setIsAnalyzing(true);
-    try {
-      const { report } = await generateTechnicalAnalysisReport({ code, sensorData });
-      setTechnicalReport(report);
-      toast({ title: 'Analysis Complete', description: 'Technical analysis report generated.' });
-    } catch (error) {
-      console.error(error);
-      toast({ title: 'Analysis Failed', description: 'Could not generate technical report.', variant: 'destructive' });
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+  const handleDownloadCode = (code: string, timestamp: Date) => {
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aiot-studio-code-${timestamp.getTime()}.ino`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Downloaded', description: `Code snapshot downloaded.` });
+  }
 
   return (
-    <div className="h-screen w-screen bg-background text-foreground overflow-hidden">
-      <main className="grid h-full w-full grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4">
+    <div className="h-screen w-screen bg-background text-foreground flex flex-col">
+      <main className="grid flex-grow grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4 overflow-hidden">
         <AppHeader 
           pipelineStatus={pipelineStatus} 
           onCompile={handleManualCompile}
+          onShowHistory={() => setIsHistoryOpen(true)}
           className="col-span-3" 
         />
         
@@ -187,17 +192,16 @@ export default function Home() {
         
         <IntelligencePanel
           className="row-start-2 flex flex-col h-full min-h-0"
-          visualizerCode={visualizerCode}
-          explanation={explanation}
-          history={history}
-          onRestore={handleRestoreFromHistory}
-          sensorData={sensorData}
-          setSensorData={setSensorData}
-          technicalReport={technicalReport}
-          onGenerateReport={handleGenerateReport}
-          isAnalyzing={isAnalyzing}
+          visualizerHtml={visualizerHtml}
         />
       </main>
+      <HistorySheet 
+        isOpen={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
+        history={history}
+        onRestore={handleRestoreFromHistory}
+        onDownload={handleDownloadCode}
+      />
     </div>
   );
 }
