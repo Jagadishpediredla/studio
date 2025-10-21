@@ -7,11 +7,25 @@ interface CompilePayload {
   board: BoardInfo;
 }
 
+const API_URL = process.env.COMPILATION_API_URL || 'http://localhost:3000';
+const API_KEY = process.env.COMPILATION_API_KEY;
+
+const getAuthHeaders = () => {
+    if (!API_KEY) {
+        throw new Error('Compilation API key is not configured.');
+    }
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+    };
+};
+
 export async function compileCode(payload: CompilePayload) {
   try {
-    const response = await fetch('http://localhost:3000/compile', {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_URL}/compile`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         code: payload.code,
         board: payload.board.fqbn,
@@ -38,19 +52,28 @@ export async function compileCode(payload: CompilePayload) {
     }
   } catch (error: any) {
     console.error('Network or fetch error:', error);
-    return { success: false, error: `Failed to connect to the compilation server. Is it running? Error: ${error.message}` };
+    let errorMessage = `Failed to connect to the compilation server. Is it running? Error: ${error.message}`;
+    if (error.message.includes('API key')) {
+        errorMessage = error.message;
+    }
+    return { success: false, error: errorMessage };
   }
 }
 
 export async function getCompilationStatus() {
     try {
-        const response = await fetch('http://localhost:3000/status');
+        const headers = getAuthHeaders();
+        const response = await fetch(`${API_URL}/status`, { headers });
         if (response.ok) {
             const data = await response.json();
             return { success: true, ...data };
         }
         return { success: false, message: 'Could not fetch status.' };
     } catch (error: any) {
-        return { success: false, message: 'Server not available.' };
+        let errorMessage = 'Server not available.';
+        if (error.message.includes('API key')) {
+            errorMessage = error.message;
+        }
+        return { success: false, message: errorMessage };
     }
 }
