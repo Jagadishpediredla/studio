@@ -43,6 +43,7 @@ const generateCodePrompt = ai.definePrompt({
 Prompt: {{{prompt}}}
 
 Respond with the code snippet, detected board type (if able to detect), and the required libraries (if any). Return the information as a valid JSON.`,
+  model: 'googleai/gemini-1.5-flash',
   config: {
         safetySettings: [
           {
