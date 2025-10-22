@@ -7,7 +7,7 @@ interface CompilePayload {
   board: BoardInfo;
 }
 
-const API_URL = process.env.COMPILATION_API_URL || 'http://localhost:3001';
+const API_URL = process.env.COMPILATION_API_URL || 'http://localhost:3002';
 const API_KEY = process.env.COMPILATION_API_KEY;
 // A simple, session-specific client ID.
 // In a real multi-user app, this would be a stable user or session ID.
