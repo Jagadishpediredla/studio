@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
 import { checkServerHealth, startCompilation, getCompilationJobStatus } from '@/app/actions';
-import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, CompilationJob } from '@/lib/types';
+import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, CompilationJob, StatusUpdate } from '@/lib/types';
 
 import AppHeader from '@/components/app-header';
 import AiControls from '@/components/ai-controls';
@@ -63,7 +63,7 @@ export default function Home() {
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStatus, setCurrentStatus] = useState('System Idle');
-  const [compilationLogs, setCompilationLogs] = useState<string[]>(['Compilation logs will appear here.']);
+  const [compilationLogs, setCompilationLogs] = useState<StatusUpdate[]>([]);
   const { toast } = useToast();
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -113,20 +113,19 @@ export default function Home() {
     updatePipeline('compile', 'processing');
     setCurrentStatus('Starting compilation job...');
     const payload = { code, board: boardInfo };
-    setCompilationLogs(prev => [...prev, 'Sending code to compilation server...', `Payload: ${JSON.stringify(payload, null, 2)}`]);
+    setCompilationLogs([{ jobId: '', type: 'info', message: 'Sending code to compilation server...', timestamp: new Date().toISOString() }]);
     
     const result = await startCompilation(payload);
 
     if (result.success && result.jobId) {
       const logMessage = `Compilation job started with ID: ${result.jobId}`;
       setCurrentStatus(logMessage);
-      setCompilationLogs(prev => [...prev, logMessage]);
       return result.jobId;
     } else {
       updatePipeline('compile', 'failed');
       const errorMessage = result.error || 'Failed to start compilation job.';
       setCurrentStatus(`Error: ${errorMessage}`);
-      setCompilationLogs(prev => [...prev, `Error: ${errorMessage}`]);
+      setCompilationLogs(prev => [...prev, { jobId: '', type: 'error', message: `Error: ${errorMessage}`, timestamp: new Date().toISOString() }]);
       toast({ 
         title: 'Compilation Failed', 
         description: errorMessage, 
@@ -142,23 +141,24 @@ export default function Home() {
 
     pollingIntervalRef.current = setInterval(async () => {
       const result = await getCompilationJobStatus(jobId);
-
-      if (!result.success) {
+      
+      if (!result.success || !result.job) {
         stopPolling();
         updatePipeline('compile', 'failed');
         const errorMsg = result.error || 'Failed to get job status.';
         setCurrentStatus(`Error: ${errorMsg}`);
-        setCompilationLogs(prev => [...prev, `Error: ${errorMsg}`]);
+        setCompilationLogs(prev => [...prev, { jobId: '', type: 'error', message: `Error: ${errorMsg}`, timestamp: new Date().toISOString() }]);
         toast({ title: 'Polling Error', description: errorMsg, variant: 'destructive' });
         setIsGenerating(false);
         return;
       }
       
-      const job: CompilationJob = result as CompilationJob;
+      const job: CompilationJob = result.job;
 
-      setCompilationLogs(job.statusUpdates || ['Waiting for server logs...']);
-      setCurrentStatus(`Job ${job.id}: ${job.status}...`);
-
+      setCompilationLogs(job.statusUpdates || []);
+      const latestLog = job.statusUpdates[job.statusUpdates.length - 1];
+      setCurrentStatus(latestLog?.message || `Job ${job.id}: ${job.status}...`);
+      
       if (job.status === 'completed') {
         stopPolling();
         updatePipeline('compile', 'completed');
@@ -200,13 +200,13 @@ export default function Home() {
       updatePipeline(step, 'processing');
       const statusMsg = `Simulating ${step} step...`;
       setCurrentStatus(statusMsg);
-      setCompilationLogs(prev => [...prev, statusMsg]);
+      setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: statusMsg, timestamp: new Date().toISOString()}]);
       const duration = 1500 + Math.random() * 1000;
       setTimeout(() => {
         updatePipeline(step, 'completed');
         const completeMsg = `Simulated ${step} step complete.`;
         setCurrentStatus(completeMsg);
-        setCompilationLogs(prev => [...prev, completeMsg]);
+        setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: completeMsg, timestamp: new Date().toISOString() }]);
         toast({ title: 'Step Complete', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step is simulated.` });
         resolve(true);
       }, duration);
@@ -222,24 +222,23 @@ export default function Home() {
     setIsGenerating(true);
     setPipelineStatus({ codeGen: 'processing', compile: 'pending', upload: 'pending', verify: 'pending' });
     setCurrentStatus('Generating code with AI...');
-    setCompilationLogs(['AI is generating code...']);
+    setCompilationLogs([]);
 
     // --- Pre-flight Health Check ---
     setCurrentStatus('Checking compilation server connection...');
-    setCompilationLogs(prev => [...prev, 'Pinging compilation server...']);
     const health = await checkServerHealth();
 
     if (!health.success) {
       const errorMessage = health.error || 'Compilation server is unreachable.';
       setCurrentStatus(errorMessage);
-      setCompilationLogs(prev => [...prev, `Error: ${errorMessage}`]);
+      setCompilationLogs(prev => [...prev, { jobId: '', type: 'error', message: `Error: ${errorMessage}`, timestamp: new Date().toISOString() }]);
       toast({ title: 'Server Not Ready', description: errorMessage, variant: 'destructive', duration: 20000 });
       setIsGenerating(false);
       setPipelineStatus({ codeGen: 'pending', compile: 'failed', upload: 'pending', verify: 'pending' });
       return;
     }
     setCurrentStatus('Server connection established.');
-    setCompilationLogs(prev => [...prev, 'Server is healthy.']);
+    setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: 'Server is healthy.', timestamp: new Date().toISOString() }]);
     // --- End Health Check ---
 
 
@@ -254,7 +253,7 @@ export default function Home() {
       setBoardInfo(newBoardInfo);
       updatePipeline('codeGen', 'completed');
       setCurrentStatus('Code generation complete.');
-      setCompilationLogs(prev => [...prev, 'Code generation successful.']);
+      setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: 'Code generation successful.', timestamp: new Date().toISOString() }]);
       
       const visPromise = generateVisualExplanation({ code: newCode }).then(({ html: newVisualizerHtml }) => {
         setVisualizerHtml(newVisualizerHtml);

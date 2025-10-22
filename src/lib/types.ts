@@ -21,17 +21,28 @@ export type HistoryItem = {
   timestamp: Date;
 };
 
-export type CompilationJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+export type CompilationJobStatus = 'created' | 'preparing' | 'installing' | 'compiling' | 'completed' | 'failed' | 'canceled';
+
+// Represents one log entry from the server's status updates
+export interface StatusUpdate {
+  timestamp: string;
+  message: string;
+  type: 'info' | 'success' | 'error';
+  details?: any;
+  jobId: string;
+}
 
 export interface CompilationJob {
   id: string;
   status: CompilationJobStatus;
-  statusUpdates: string[];
+  progress?: number;
+  statusUpdates: StatusUpdate[];
   createdAt: string;
   completedAt?: string;
   result?: {
     binary: string;
     filename: string;
+    size: number;
   };
   error?: string | null;
 }

@@ -6,10 +6,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrainCircuit, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { StatusUpdate } from '@/lib/types';
 
 interface IntelligencePanelProps extends React.HTMLAttributes<HTMLDivElement> {
   visualizerHtml: string;
-  compilationLogs: string[];
+  compilationLogs: StatusUpdate[];
 }
 
 export default function IntelligencePanel({
@@ -48,6 +49,17 @@ export default function IntelligencePanel({
       ${visualizerHtml}
     </html>
   `;
+  
+  const getLogColor = (type: StatusUpdate['type']) => {
+    switch (type) {
+      case 'success':
+        return 'text-green-400';
+      case 'error':
+        return 'text-red-400';
+      default:
+        return 'text-muted-foreground';
+    }
+  }
 
   return (
     <Card className={cn("flex flex-col", className)} {...props}>
@@ -77,9 +89,12 @@ export default function IntelligencePanel({
             <TabsContent value="logs" className="flex-grow min-h-0 m-0">
                <CardContent className="h-full p-0">
                 <ScrollArea className="h-full w-full">
-                  <div className="p-4 font-code text-xs text-muted-foreground bg-black h-full">
+                  <div className="p-4 font-code text-xs bg-black h-full">
                     {compilationLogs.map((log, index) => (
-                      <p key={index} className="whitespace-pre-wrap leading-relaxed">&gt; {log}</p>
+                      <p key={index} className={cn("whitespace-pre-wrap leading-relaxed", getLogColor(log.type))}>
+                        <span className="text-gray-500 mr-2">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                        &gt; {log.message}
+                      </p>
                     ))}
                     <div ref={logsEndRef} />
                   </div>

@@ -9,6 +9,10 @@ interface CompilePayload {
 
 const API_URL = process.env.COMPILATION_API_URL || 'http://localhost:3001';
 const API_KEY = process.env.COMPILATION_API_KEY;
+// A simple, session-specific client ID.
+// In a real multi-user app, this would be a stable user or session ID.
+const CLIENT_ID = 'aiot-studio-session'; 
+
 
 const getAuthHeaders = () => {
     if (!API_KEY) {
@@ -17,15 +21,15 @@ const getAuthHeaders = () => {
     return {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${API_KEY}`,
+        'X-Client-ID': CLIENT_ID,
     };
 };
 
 export async function checkServerHealth() {
   try {
-    const headers = getAuthHeaders();
+    // Health check does not require auth according to docs
     const response = await fetch(`${API_URL}/health`, {
       method: 'GET',
-      headers,
       cache: 'no-store',
     });
 
@@ -91,8 +95,9 @@ export async function getCompilationJobStatus(jobId: string) {
         const response = await fetch(`${API_URL}/compile/status/${jobId}`, { headers, cache: 'no-store' });
         const data = await response.json();
         
-        if (response.ok) {
-            return { success: true, ...data };
+        if (response.ok && data.success) {
+            // The new API nests the job object.
+            return { success: true, job: data.job };
         }
         return { success: false, error: data.error || 'Could not fetch job status.' };
 
