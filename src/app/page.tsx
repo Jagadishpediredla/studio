@@ -113,7 +113,7 @@ export default function Home() {
     updatePipeline('compile', 'processing');
     setCurrentStatus('Starting compilation job...');
     const payload = { code, board: boardInfo };
-    setCompilationLogs([{ jobId: '', type: 'info', message: 'Sending code to compilation server...', timestamp: new Date().toISOString() }]);
+    setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: 'Sending code to compilation server...', timestamp: new Date().toISOString() }]);
     
     const result = await startCompilation(payload);
 
