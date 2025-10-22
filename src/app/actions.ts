@@ -26,18 +26,28 @@ const getAuthHeaders = () => {
 };
 
 export async function checkServerHealth() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+
   try {
-    // Health check does not require auth according to docs
     const response = await fetch(`${API_URL}/health`, {
       method: 'GET',
       cache: 'no-store',
+      signal: controller.signal, // Pass the abort signal to fetch
     });
+    
+    clearTimeout(timeoutId);
 
     if (response.ok) {
         return { success: true };
     }
     return { success: false, error: `Server health check failed with status: ${response.status}` };
   } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      return { success: false, error: 'Health check timed out. The server might be slow or unreachable.' };
+    }
+    
     let errorMessage = `Failed to connect to the compilation server. Is it running?`;
     if (error.cause?.code === 'ECONNREFUSED') {
          errorMessage = `Connection refused at ${API_URL}. Please ensure the compilation server is running.`;
@@ -49,6 +59,8 @@ export async function checkServerHealth() {
 export async function startCompilation(payload: CompilePayload) {
   try {
     const headers = getAuthHeaders();
+    console.log("Sending compilation request with payload:", JSON.stringify(payload, null, 2));
+
     const response = await fetch(`${API_URL}/compile/async`, {
       method: 'POST',
       headers,
