@@ -156,7 +156,9 @@ export default function Home() {
       const job: CompilationJob = result.job;
 
       setCompilationLogs(job.statusUpdates || []);
-      const latestLog = job.statusUpdates[job.statusUpdates.length - 1];
+      const latestLog = job.statusUpdates && job.statusUpdates.length > 0
+        ? job.statusUpdates[job.statusUpdates.length - 1]
+        : null;
       setCurrentStatus(latestLog?.message || `Job ${job.id}: ${job.status}...`);
       
       if (job.status === 'completed') {
@@ -365,3 +367,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
