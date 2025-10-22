@@ -153,7 +153,7 @@ export default function Home() {
       return;
     }
 
-    const url = `${API_URL}/compile/status/${jobId}/stream?apiKey=${encodeURIComponent(API_KEY)}`;
+    const url = `${API_URL}/compile/status/${jobId}/stream?api_key=${encodeURIComponent(API_KEY)}`;
 
     eventSourceRef.current = new EventSource(url);
     
@@ -385,3 +385,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
