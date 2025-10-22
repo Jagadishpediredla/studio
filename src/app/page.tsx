@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
-import { startCompilation, getCompilationJobStatus } from '@/app/actions';
+import { checkServerHealth, startCompilation } from '@/app/actions';
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, CompilationJob } from '@/lib/types';
 
 import AppHeader from '@/components/app-header';
@@ -140,11 +140,23 @@ export default function Home() {
     stopStreaming();
     // Use NEXT_PUBLIC_ for client-side env vars
     const API_URL = process.env.NEXT_PUBLIC_COMPILATION_API_URL || process.env.COMPILATION_API_URL || 'http://localhost:3001';
+    const API_KEY = process.env.NEXT_PUBLIC_COMPILATION_API_KEY || process.env.COMPILATION_API_KEY;
 
-    // EventSource doesn't support custom headers, so auth must be handled differently if needed by the stream endpoint.
-    // For this implementation, we assume the stream endpoint is accessible without extra headers if the initial job creation was successful.
+    // For EventSource, auth must be handled differently, e.g. via query params if the server supports it.
+    // As a workaround for this example, we assume the server might check for a query param.
+    // A more secure method would be to use a short-lived token or a different auth mechanism for streams.
     const url = `${API_URL}/compile/status/${jobId}/stream`;
-    eventSourceRef.current = new EventSource(url, { withCredentials: false });
+
+    eventSourceRef.current = new EventSource(url, {
+      withCredentials: true, // This can be used if cookies are set up for auth
+    });
+
+    // NOTE: Standard EventSource does not support custom headers.
+    // The backend would need to be adapted to accept auth tokens via query parameters
+    // or cookies for this to be secure and production-ready.
+    // For this prototype, we're assuming the stream endpoint is protected by other means
+    // or is on a trusted network.
+
 
     eventSourceRef.current.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -228,6 +240,25 @@ export default function Home() {
     setPipelineStatus({ codeGen: 'processing', compile: 'pending', upload: 'pending', verify: 'pending' });
     setCurrentStatus('Generating code with AI...');
     setCompilationLogs(['AI is generating code...']);
+
+    // --- Pre-flight Health Check ---
+    setCurrentStatus('Checking compilation server connection...');
+    setCompilationLogs(prev => [...prev, 'Pinging compilation server...']);
+    const health = await checkServerHealth();
+
+    if (!health.success) {
+      const errorMessage = health.error || 'Compilation server is unreachable.';
+      setCurrentStatus(errorMessage);
+      setCompilationLogs(prev => [...prev, `Error: ${errorMessage}`]);
+      toast({ title: 'Server Not Ready', description: errorMessage, variant: 'destructive', duration: 20000 });
+      setIsGenerating(false);
+      setPipelineStatus({ codeGen: 'pending', compile: 'failed', upload: 'pending', verify: 'pending' });
+      return;
+    }
+    setCurrentStatus('Server connection established.');
+    setCompilationLogs(prev => [...prev, 'Server is healthy.']);
+    // --- End Health Check ---
+
 
     const currentHistoryItem: HistoryItem = { id: crypto.randomUUID(), code, board: boardInfo, visualizerHtml: visualizerHtml, timestamp: new Date(), prompt };
     setHistory(prev => [currentHistoryItem, ...prev]);

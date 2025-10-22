@@ -20,6 +20,28 @@ const getAuthHeaders = () => {
     };
 };
 
+export async function checkServerHealth() {
+  try {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_URL}/health`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (response.ok) {
+        return { success: true };
+    }
+    return { success: false, error: `Server health check failed with status: ${response.status}` };
+  } catch (error: any) {
+    console.error('Network or fetch error in checkServerHealth:', error);
+    let errorMessage = `Failed to connect to the compilation server. Is it running?`;
+    if (error.code === 'ECONNREFUSED') {
+         errorMessage = `Connection refused. Please ensure the compilation server is running at ${API_URL}.`;
+    }
+    return { success: false, error: errorMessage };
+  }
+}
+
 export async function startCompilation(payload: CompilePayload) {
   try {
     const headers = getAuthHeaders();
@@ -49,7 +71,8 @@ export async function startCompilation(payload: CompilePayload) {
     }
     return { success: false, error: `Failed to start compilation: ${errorText}` };
 
-  } catch (error: any) {
+  } catch (error: any)
+  {
     console.error('Network or fetch error in startCompilation:', error);
     let errorMessage = `Failed to connect to the compilation server. Is it running?`;
     if (error.code === 'ECONNREFUSED') {
