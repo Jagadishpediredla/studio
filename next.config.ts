@@ -31,11 +31,12 @@ const nextConfig: NextConfig = {
     ],
   },
   env: {
+    COMPILATION_API_URL: process.env.COMPILATION_API_URL,
+    COMPILATION_API_KEY: process.env.COMPILATION_API_KEY,
+    // NEXT_PUBLIC_ variables are exposed to the browser
     NEXT_PUBLIC_COMPILATION_API_URL: process.env.COMPILATION_API_URL,
     NEXT_PUBLIC_COMPILATION_API_KEY: process.env.COMPILATION_API_KEY,
   },
 };
 
 export default nextConfig;
-
-    

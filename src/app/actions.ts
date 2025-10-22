@@ -1,6 +1,6 @@
 'use server';
 
-import type { BoardInfo } from '@/lib/types';
+import type { BoardInfo, CompilationJob } from '@/lib/types';
 
 interface CompilePayload {
   code: string;
@@ -9,11 +9,6 @@ interface CompilePayload {
 
 const API_URL = process.env.COMPILATION_API_URL || 'http://localhost:3001';
 const API_KEY = process.env.COMPILATION_API_KEY;
-
-// Note: EventSource on the client does not support custom headers.
-// If your streaming endpoint requires auth, you might need to pass the token as a query parameter.
-// For this app, we assume the stream endpoint is either unprotected or handles auth differently.
-// The main compilation start endpoint WILL use the key.
 
 const getAuthHeaders = () => {
     if (!API_KEY) {
@@ -38,17 +33,28 @@ export async function startCompilation(payload: CompilePayload) {
       }),
     });
 
-    const data = await response.json();
     if (response.ok) {
+        const data = await response.json();
         return { success: true, jobId: data.jobId };
     }
     
-    return { success: false, error: data.error || 'Failed to start compilation job.' };
+    // Handle non-ok responses from the server (e.g., 400, 500 errors)
+    let errorText = `Server responded with status: ${response.status}`;
+    try {
+        const errorData = await response.json();
+        errorText = errorData.error || errorText;
+    } catch (e) {
+        // Response was not JSON, use the raw text
+        errorText = await response.text();
+    }
+    return { success: false, error: `Failed to start compilation: ${errorText}` };
 
   } catch (error: any) {
-    console.error('Network or fetch error:', error);
-    let errorMessage = `Failed to connect to the compilation server. Is it running? Error: ${error.message}`;
-    if (error.message.includes('API key')) {
+    console.error('Network or fetch error in startCompilation:', error);
+    let errorMessage = `Failed to connect to the compilation server. Is it running?`;
+    if (error.code === 'ECONNREFUSED') {
+         errorMessage = `Connection refused. Please ensure the compilation server is running at ${API_URL}.`;
+    } else if (error.message.includes('API key')) {
         errorMessage = error.message;
     }
     return { success: false, error: errorMessage };
@@ -67,7 +73,7 @@ export async function getCompilationJobStatus(jobId: string) {
         return { success: false, error: data.error || 'Could not fetch job status.' };
 
     } catch (error: any) {
-        let errorMessage = 'Server not available.';
+        let errorMessage = 'Server not available while fetching job status.';
         if (error.message.includes('API key')) {
             errorMessage = error.message;
         }

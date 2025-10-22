@@ -100,7 +100,9 @@ export default function Home() {
     const a = document.createElement('a');
     a.href = url;
     a.download = job.result.filename || `firmware-${new Date().getTime()}.bin`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setCurrentStatus('Firmware downloaded successfully.');
     toast({ title: 'Success', description: `Firmware "${a.download}" downloaded.` });
@@ -110,18 +112,19 @@ export default function Home() {
   const runCompileStep = async (): Promise<string | null> => {
     updatePipeline('compile', 'processing');
     setCurrentStatus('Starting compilation job...');
-    setCompilationLogs(['Sending code to compilation server...']);
+    setCompilationLogs(prev => [...prev, 'Sending code to compilation server...']);
     
     const result = await startCompilation({ code, board: boardInfo });
 
     if (result.success && result.jobId) {
-      setCurrentStatus(`Compilation job started with ID: ${result.jobId}`);
-      setCompilationLogs(prev => [...prev, `Compilation job started with ID: ${result.jobId}`]);
+      const logMessage = `Compilation job started with ID: ${result.jobId}`;
+      setCurrentStatus(logMessage);
+      setCompilationLogs(prev => [...prev, logMessage]);
       return result.jobId;
     } else {
       updatePipeline('compile', 'failed');
       const errorMessage = result.error || 'Failed to start compilation job.';
-      setCurrentStatus(errorMessage);
+      setCurrentStatus(`Error: ${errorMessage}`);
       setCompilationLogs(prev => [...prev, `Error: ${errorMessage}`]);
       toast({ 
         title: 'Compilation Failed', 
@@ -135,9 +138,11 @@ export default function Home() {
 
   const streamCompilationStatus = (jobId: string) => {
     stopStreaming();
-    const API_URL = process.env.NEXT_PUBLIC_COMPILATION_API_URL || 'http://localhost:3001';
-    const API_KEY = process.env.NEXT_PUBLIC_COMPILATION_API_KEY;
+    // Use NEXT_PUBLIC_ for client-side env vars
+    const API_URL = process.env.NEXT_PUBLIC_COMPILATION_API_URL || process.env.COMPILATION_API_URL || 'http://localhost:3001';
 
+    // EventSource doesn't support custom headers, so auth must be handled differently if needed by the stream endpoint.
+    // For this implementation, we assume the stream endpoint is accessible without extra headers if the initial job creation was successful.
     const url = `${API_URL}/compile/status/${jobId}/stream`;
     eventSourceRef.current = new EventSource(url, { withCredentials: false });
 
@@ -187,9 +192,10 @@ export default function Home() {
         console.error('EventSource failed:', err);
         stopStreaming();
         updatePipeline('compile', 'failed');
-        const errorMsg = 'Connection to compilation server lost.';
+        const errorMsg = 'Connection to compilation stream lost.';
         setCurrentStatus(errorMsg);
-        toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
+        setCompilationLogs(prev => [...prev, `Error: ${errorMsg}`]);
+        toast({ title: 'Stream Error', description: errorMsg, variant: 'destructive' });
         setIsGenerating(false);
     };
   };
@@ -197,11 +203,15 @@ export default function Home() {
   const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile'>): Promise<boolean> => {
     return new Promise((resolve) => {
       updatePipeline(step, 'processing');
-      setCurrentStatus(`Simulating ${step} step...`);
+      const statusMsg = `Simulating ${step} step...`;
+      setCurrentStatus(statusMsg);
+      setCompilationLogs(prev => [...prev, statusMsg]);
       const duration = 1500 + Math.random() * 1000;
       setTimeout(() => {
         updatePipeline(step, 'completed');
-        setCurrentStatus(`Simulated ${step} step complete.`);
+        const completeMsg = `Simulated ${step} step complete.`;
+        setCurrentStatus(completeMsg);
+        setCompilationLogs(prev => [...prev, completeMsg]);
         toast({ title: 'Step Complete', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step is simulated.` });
         resolve(true);
       }, duration);
@@ -342,5 +352,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
