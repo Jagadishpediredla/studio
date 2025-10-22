@@ -7,7 +7,7 @@ interface CompilePayload {
   board: BoardInfo;
 }
 
-const API_URL = process.env.COMPILATION_API_URL || 'http://localhost:3000';
+const API_URL = process.env.COMPILATION_API_URL || 'http://localhost:3001';
 const API_KEY = process.env.COMPILATION_API_KEY;
 
 const getAuthHeaders = () => {
@@ -20,10 +20,10 @@ const getAuthHeaders = () => {
     };
 };
 
-export async function compileCode(payload: CompilePayload) {
+export async function startCompilation(payload: CompilePayload) {
   try {
     const headers = getAuthHeaders();
-    const response = await fetch(`${API_URL}/compile`, {
+    const response = await fetch(`${API_URL}/compile/async`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -34,29 +34,22 @@ export async function compileCode(payload: CompilePayload) {
     });
 
     if (response.ok) {
-      const firmwareBlob = await response.blob();
-      // Convert blob to a base64 string to send back to the client
-      const buffer = await firmwareBlob.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      
-      return { 
-        success: true, 
-        firmware: base64, 
-        contentType: firmwareBlob.type || 'application/octet-stream' 
-      };
-    } else {
-      let errorData;
-      let errorMessage;
-      try {
-        errorData = await response.json();
-        errorMessage = errorData.error || 'An unknown compilation error occurred.';
-      } catch (e) {
-        // If the response is not JSON, use the raw text as the error.
-        errorMessage = await response.text();
-        errorData = { statusUpdates: [errorMessage] };
+      const data = await response.json();
+      if (data.success) {
+        return { success: true, jobId: data.jobId };
       }
-      return { success: false, error: errorMessage, statusUpdates: errorData.statusUpdates || [] };
     }
+    
+    let errorData;
+    let errorMessage;
+    try {
+      errorData = await response.json();
+      errorMessage = errorData.error || 'Failed to start compilation job.';
+    } catch (e) {
+      errorMessage = await response.text();
+    }
+    return { success: false, error: errorMessage };
+
   } catch (error: any) {
     console.error('Network or fetch error:', error);
     let errorMessage = `Failed to connect to the compilation server. Is it running? Error: ${error.message}`;
@@ -67,20 +60,20 @@ export async function compileCode(payload: CompilePayload) {
   }
 }
 
-export async function getCompilationStatus() {
+export async function getCompilationJobStatus(jobId: string) {
     try {
         const headers = getAuthHeaders();
-        const response = await fetch(`${API_URL}/status`, { headers });
+        const response = await fetch(`${API_URL}/compile/status/${jobId}`, { headers });
         if (response.ok) {
             const data = await response.json();
             return { success: true, ...data };
         }
-        return { success: false, message: 'Could not fetch status.' };
+        return { success: false, error: 'Could not fetch job status.' };
     } catch (error: any) {
         let errorMessage = 'Server not available.';
         if (error.message.includes('API key')) {
             errorMessage = error.message;
         }
-        return { success: false, message: errorMessage };
+        return { success: false, error: errorMessage };
     }
 }

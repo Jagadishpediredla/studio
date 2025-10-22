@@ -20,3 +20,18 @@ export type HistoryItem = {
   visualizerHtml: string;
   timestamp: Date;
 };
+
+export type CompilationJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+export interface CompilationJob {
+  id: string;
+  status: CompilationJobStatus;
+  statusUpdates: string[];
+  createdAt: string;
+  completedAt?: string;
+  result?: {
+    binary: string;
+    filename: string;
+  };
+  error?: string | null;
+}

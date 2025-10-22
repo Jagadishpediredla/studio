@@ -9,13 +9,21 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface IntelligencePanelProps extends React.HTMLAttributes<HTMLDivElement> {
   visualizerHtml: string;
+  compilationLogs: string[];
 }
 
 export default function IntelligencePanel({
   visualizerHtml,
+  compilationLogs,
   className,
   ...props
 }: IntelligencePanelProps) {
+  const logsEndRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [compilationLogs]);
+
   const iframeSrcDoc = `
     <html>
       <head>
@@ -52,6 +60,7 @@ export default function IntelligencePanel({
                     </CardTitle>
                     <TabsList>
                         <TabsTrigger value="visualizer">AI Visualizer</TabsTrigger>
+                        <TabsTrigger value="logs">Logs</TabsTrigger>
                     </TabsList>
                 </div>
             </CardHeader>
@@ -64,6 +73,18 @@ export default function IntelligencePanel({
                     title="AI Generated Code Visualizer"
                 />
               </CardContent>
+            </TabsContent>
+            <TabsContent value="logs" className="flex-grow min-h-0 m-0">
+               <CardContent className="h-full p-0">
+                <ScrollArea className="h-full w-full">
+                  <div className="p-4 font-code text-xs text-muted-foreground bg-black h-full">
+                    {compilationLogs.map((log, index) => (
+                      <p key={index} className="whitespace-pre-wrap leading-relaxed">&gt; {log}</p>
+                    ))}
+                    <div ref={logsEndRef} />
+                  </div>
+                </ScrollArea>
+               </CardContent>
             </TabsContent>
         </Tabs>
     </Card>
