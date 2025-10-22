@@ -62,7 +62,7 @@ export default function Home() {
     verify: 'pending',
   });
   const [isGenerating, setIsGenerating] = useState(false);
-  const [compilationStatus, setCompilationStatus] = useState<string[]>([]);
+  const [currentStatus, setCurrentStatus] = useState('System Idle');
   const { toast } = useToast();
   const statusIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -74,22 +74,18 @@ export default function Home() {
     if (statusIntervalRef.current) {
       clearInterval(statusIntervalRef.current);
       statusIntervalRef.current = null;
+      setCurrentStatus('System Idle');
     }
   };
 
   const startStatusPolling = () => {
     stopStatusPolling();
-    setCompilationStatus([]);
+    setCurrentStatus('Connecting to compilation server...');
     statusIntervalRef.current = setInterval(async () => {
       const statusRes = await getCompilationStatus();
       if (statusRes.success && statusRes.message) {
-        setCompilationStatus(prev => {
-          const newStatus = statusRes.message as string;
-          if (prev.at(-1) !== newStatus) {
-            return [...prev, newStatus];
-          }
-          return prev;
-        });
+        const newStatus = statusRes.message as string;
+        setCurrentStatus(prev => newStatus !== prev ? newStatus : prev);
       }
     }, 2000);
   };
@@ -108,8 +104,8 @@ export default function Home() {
 
     if (result.success && result.firmware) {
       updatePipeline('compile', 'completed');
+      setCurrentStatus('Compilation successful. Firmware is ready for download.');
       toast({ title: 'Success', description: 'Firmware compiled successfully.' });
-      setCompilationStatus(prev => [...prev, 'Compilation successful. Firmware is ready for download.']);
       
       const byteCharacters = atob(result.firmware);
       const byteNumbers = new Array(byteCharacters.length);
@@ -129,7 +125,7 @@ export default function Home() {
     } else {
       updatePipeline('compile', 'failed');
       const finalStatus = result.statusUpdates || [];
-      setCompilationStatus(finalStatus);
+      setCurrentStatus(finalStatus.at(-1) || 'Compilation failed.');
       const errorDescription = (
         <div>
             <p className="font-semibold">Compilation failed. See details below:</p>
@@ -151,9 +147,11 @@ export default function Home() {
   const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile'>): Promise<boolean> => {
     return new Promise((resolve) => {
       updatePipeline(step, 'processing');
+      setCurrentStatus(`Simulating ${step} step...`);
       const duration = 1500 + Math.random() * 1000;
       setTimeout(() => {
         updatePipeline(step, 'completed');
+        setCurrentStatus(`Simulated ${step} step complete.`);
         toast({ title: 'Step Complete', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step is simulated.` });
         resolve(true);
       }, duration);
@@ -168,7 +166,7 @@ export default function Home() {
     }
     setIsGenerating(true);
     setPipelineStatus({ codeGen: 'processing', compile: 'pending', upload: 'pending', verify: 'pending' });
-    setCompilationStatus([]);
+    setCurrentStatus('Generating code with AI...');
 
     const currentHistoryItem: HistoryItem = { id: crypto.randomUUID(), code, board: boardInfo, visualizerHtml: visualizerHtml, timestamp: new Date(), prompt };
     setHistory(prev => [currentHistoryItem, ...prev]);
@@ -180,6 +178,7 @@ export default function Home() {
       const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
       setBoardInfo(newBoardInfo);
       updatePipeline('codeGen', 'completed');
+      setCurrentStatus('Code generation complete.');
       
       const visPromise = generateVisualExplanation({ code: newCode }).then(({ html: newVisualizerHtml }) => {
         setVisualizerHtml(newVisualizerHtml);
@@ -255,6 +254,8 @@ export default function Home() {
           pipelineStatus={pipelineStatus}
           onManualAction={handleManualAction}
           onShowHistory={() => setIsHistoryOpen(true)}
+          isGenerating={isGenerating}
+          currentStatus={currentStatus}
           className="col-span-3" 
         />
         
@@ -278,7 +279,6 @@ export default function Home() {
         <IntelligencePanel
           className="row-start-2 flex flex-col h-full min-h-0"
           visualizerHtml={visualizerHtml}
-          compilationStatus={compilationStatus}
         />
       </main>
       <HistorySheet 

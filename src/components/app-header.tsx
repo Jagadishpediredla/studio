@@ -4,6 +4,7 @@ import * as React from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import DeploymentPipeline from "@/components/deployment-pipeline";
+import StatusIndicator from "@/components/status-indicator";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
 import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History } from "lucide-react";
@@ -12,9 +13,11 @@ interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   pipelineStatus: PipelineStatus;
   onManualAction: (step: keyof Omit<PipelineStatus, 'codeGen'>) => void;
   onShowHistory: () => void;
+  isGenerating: boolean;
+  currentStatus: string;
 }
 
-export default function AppHeader({ pipelineStatus, onManualAction, onShowHistory, className, ...props }: AppHeaderProps) {
+export default function AppHeader({ pipelineStatus, onManualAction, onShowHistory, isGenerating, currentStatus, className, ...props }: AppHeaderProps) {
   const isActionInProgress = Object.values(pipelineStatus).some(status => status === 'processing');
 
   return (
@@ -70,6 +73,7 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
                     fill="none"
                     stroke="currentColor"
                     strokeLinecap="round"
+
                     strokeLinejoin="round"
                     strokeWidth="16"
                   />
@@ -105,7 +109,10 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
             </DropdownMenu>
         </div>
       </div>
-      <DeploymentPipeline status={pipelineStatus} />
+      <div className="flex items-center gap-4">
+        <DeploymentPipeline status={pipelineStatus} />
+        <StatusIndicator isProcessing={isActionInProgress || isGenerating} statusMessage={currentStatus} />
+      </div>
     </header>
   );
 }
