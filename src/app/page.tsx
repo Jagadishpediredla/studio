@@ -112,9 +112,10 @@ export default function Home() {
   const runCompileStep = async (): Promise<string | null> => {
     updatePipeline('compile', 'processing');
     setCurrentStatus('Starting compilation job...');
-    setCompilationLogs(prev => [...prev, 'Sending code to compilation server...']);
+    const payload = { code, board: boardInfo };
+    setCompilationLogs(prev => [...prev, 'Sending code to compilation server...', `Payload: ${JSON.stringify(payload, null, 2)}`]);
     
-    const result = await startCompilation({ code, board: boardInfo });
+    const result = await startCompilation(payload);
 
     if (result.success && result.jobId) {
       const logMessage = `Compilation job started with ID: ${result.jobId}`;
@@ -141,21 +142,23 @@ export default function Home() {
     // Use NEXT_PUBLIC_ for client-side env vars
     const API_URL = process.env.NEXT_PUBLIC_COMPILATION_API_URL || process.env.COMPILATION_API_URL || 'http://localhost:3001';
     const API_KEY = process.env.NEXT_PUBLIC_COMPILATION_API_KEY || process.env.COMPILATION_API_KEY;
+    
+    if (!API_KEY) {
+      const errorMsg = "Compilation API key is not configured on the client.";
+      console.error(errorMsg);
+      updatePipeline('compile', 'failed');
+      setCurrentStatus(errorMsg);
+      setCompilationLogs(prev => [...prev, `Error: ${errorMsg}`]);
+      toast({ title: 'Configuration Error', description: errorMsg, variant: 'destructive' });
+      setIsGenerating(false);
+      return;
+    }
 
-    // For EventSource, auth must be handled differently, e.g. via query params if the server supports it.
-    // As a workaround for this example, we assume the server might check for a query param.
-    // A more secure method would be to use a short-lived token or a different auth mechanism for streams.
-    const url = `${API_URL}/compile/status/${jobId}/stream`;
+    const url = `${API_URL}/compile/status/${jobId}/stream?apiKey=${encodeURIComponent(API_KEY)}`;
 
-    eventSourceRef.current = new EventSource(url, {
-      withCredentials: true, // This can be used if cookies are set up for auth
-    });
-
-    // NOTE: Standard EventSource does not support custom headers.
-    // The backend would need to be adapted to accept auth tokens via query parameters
-    // or cookies for this to be secure and production-ready.
-    // For this prototype, we're assuming the stream endpoint is protected by other means
-    // or is on a trusted network.
+    eventSourceRef.current = new EventSource(url);
+    
+    setCompilationLogs(prev => [...prev, `Opening real-time stream to: ${url.replace(API_KEY, '****')}`]);
 
 
     eventSourceRef.current.onmessage = (event) => {
@@ -204,7 +207,7 @@ export default function Home() {
         console.error('EventSource failed:', err);
         stopStreaming();
         updatePipeline('compile', 'failed');
-        const errorMsg = 'Connection to compilation stream lost.';
+        const errorMsg = 'Connection to compilation stream lost. Check server logs and network.';
         setCurrentStatus(errorMsg);
         setCompilationLogs(prev => [...prev, `Error: ${errorMsg}`]);
         toast({ title: 'Stream Error', description: errorMsg, variant: 'destructive' });
@@ -383,3 +386,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

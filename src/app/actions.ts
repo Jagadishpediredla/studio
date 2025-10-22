@@ -26,6 +26,7 @@ export async function checkServerHealth() {
     const response = await fetch(`${API_URL}/health`, {
       method: 'GET',
       headers,
+      cache: 'no-store',
     });
 
     if (response.ok) {
@@ -33,10 +34,9 @@ export async function checkServerHealth() {
     }
     return { success: false, error: `Server health check failed with status: ${response.status}` };
   } catch (error: any) {
-    console.error('Network or fetch error in checkServerHealth:', error);
     let errorMessage = `Failed to connect to the compilation server. Is it running?`;
-    if (error.code === 'ECONNREFUSED') {
-         errorMessage = `Connection refused. Please ensure the compilation server is running at ${API_URL}.`;
+    if (error.cause?.code === 'ECONNREFUSED') {
+         errorMessage = `Connection refused at ${API_URL}. Please ensure the compilation server is running.`;
     }
     return { success: false, error: errorMessage };
   }
@@ -60,24 +60,25 @@ export async function startCompilation(payload: CompilePayload) {
         return { success: true, jobId: data.jobId };
     }
     
-    // Handle non-ok responses from the server (e.g., 400, 500 errors)
     let errorText = `Server responded with status: ${response.status}`;
     try {
         const errorData = await response.json();
         errorText = errorData.error || errorText;
     } catch (e) {
-        // Response was not JSON, use the raw text
-        errorText = await response.text();
+        try {
+          errorText = await response.text();
+        } catch (e) {
+            // ignore
+        }
     }
     return { success: false, error: `Failed to start compilation: ${errorText}` };
 
   } catch (error: any)
   {
-    console.error('Network or fetch error in startCompilation:', error);
     let errorMessage = `Failed to connect to the compilation server. Is it running?`;
-    if (error.code === 'ECONNREFUSED') {
-         errorMessage = `Connection refused. Please ensure the compilation server is running at ${API_URL}.`;
-    } else if (error.message.includes('API key')) {
+    if (error.cause?.code === 'ECONNREFUSED') {
+         errorMessage = `Connection refused at ${API_URL}. Please ensure the compilation server is running.`;
+    } else if (error.message?.includes('API key')) {
         errorMessage = error.message;
     }
     return { success: false, error: errorMessage };
@@ -87,7 +88,7 @@ export async function startCompilation(payload: CompilePayload) {
 export async function getCompilationJobStatus(jobId: string) {
     try {
         const headers = getAuthHeaders();
-        const response = await fetch(`${API_URL}/compile/status/${jobId}`, { headers });
+        const response = await fetch(`${API_URL}/compile/status/${jobId}`, { headers, cache: 'no-store' });
         const data = await response.json();
         
         if (response.ok) {
@@ -103,3 +104,5 @@ export async function getCompilationJobStatus(jobId: string) {
         return { success: false, error: errorMessage };
     }
 }
+
+    
