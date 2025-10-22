@@ -10,9 +10,20 @@ import type { BoardInfo } from "@/lib/types";
 import AceEditor from "react-ace";
 import type { IAceEditor } from "react-ace/lib/types";
 
+import ace from "ace-builds";
 import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/theme-tomorrow_night";
 import "ace-builds/src-noconflict/ext-language_tools";
+
+// Configure Ace to load workers from a CDN
+ace.config.set(
+  "basePath",
+  "https://cdn.jsdelivr.net/npm/ace-builds@1.35.2/src-noconflict/"
+);
+ace.config.setModuleUrl(
+  "ace/mode/c_cpp_worker",
+  "https://cdn.jsdelivr.net/npm/ace-builds@1.35.2/src-noconflict/worker-c_cpp.js"
+);
 
 
 interface CodeEditorPanelProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -68,6 +79,7 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo, classNa
               enableSnippets: true,
               showLineNumbers: true,
               tabSize: 2,
+              useWorker: true, // This is important for performance and some features
             }}
             fontSize={16}
             showPrintMargin={false}
