@@ -65,22 +65,22 @@ export default function Home() {
   const [currentStatus, setCurrentStatus] = useState('System Idle');
   const [compilationLogs, setCompilationLogs] = useState<string[]>(['Compilation logs will appear here.']);
   const { toast } = useToast();
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   const updatePipeline = (step: keyof PipelineStatus, status: PipelineStep) => {
     setPipelineStatus(prev => ({ ...prev, [step]: status }));
   };
 
-  const stopPolling = () => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
+  const stopStreaming = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
   };
   
   // Cleanup on unmount
   useEffect(() => {
-    return () => stopPolling();
+    return () => stopStreaming();
   }, []);
   
   const handleFirmwareDownload = (job: CompilationJob) => {
@@ -133,63 +133,65 @@ export default function Home() {
     }
   };
 
-  const pollCompilationStatus = (jobId: string) => {
-    stopPolling();
+  const streamCompilationStatus = (jobId: string) => {
+    stopStreaming();
+    const API_URL = process.env.NEXT_PUBLIC_COMPILATION_API_URL || 'http://localhost:3001';
+    const API_KEY = process.env.NEXT_PUBLIC_COMPILATION_API_KEY;
 
-    pollingRef.current = setInterval(async () => {
-      const statusRes = await getCompilationJobStatus(jobId);
+    const url = `${API_URL}/compile/status/${jobId}/stream`;
+    eventSourceRef.current = new EventSource(url, { withCredentials: false });
 
-      if (statusRes.success && statusRes.job) {
-        const { job } = statusRes;
-        setCompilationLogs(job.statusUpdates || ['Waiting for server logs...']);
-        
-        switch (job.status) {
-          case 'processing':
-          case 'queued':
+    eventSourceRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const { job } = data;
+
+        if (job) {
+            setCompilationLogs(job.statusUpdates || ['Waiting for server logs...']);
             setCurrentStatus(`Job ${job.id}: ${job.status}...`);
-            break;
-          case 'completed':
-            stopPolling();
-            updatePipeline('compile', 'completed');
-            setCurrentStatus('Compilation successful. Firmware is ready.');
-            handleFirmwareDownload(job);
-            
-            // Continue with the rest of the pipeline
-            (async () => {
-              const uploadSuccess = await runPlaceholderStep('upload');
-              if (uploadSuccess) {
-                await runPlaceholderStep('verify');
-              }
-              setIsGenerating(false);
-            })();
-            break;
-          case 'failed':
-            stopPolling();
-            updatePipeline('compile', 'failed');
-            const errorMsg = job.error || 'An unknown compilation error occurred.';
-            setCurrentStatus(`Compilation Failed: ${errorMsg}`);
-             const errorDescription = (
-                <div>
-                    <p className="font-semibold">Compilation failed. See details below:</p>
-                    <pre className="mt-2 w-full rounded-md bg-destructive/20 p-4 text-destructive-foreground whitespace-pre-wrap font-code text-xs">
-                        {errorMsg}
-                    </pre>
-                </div>
-              );
-            toast({ title: 'Compilation Failed', description: errorDescription, variant: 'destructive', duration: 20000 });
-            setIsGenerating(false);
-            break;
+
+            if (data.type === 'end') {
+                stopStreaming();
+                if (job.status === 'completed') {
+                    updatePipeline('compile', 'completed');
+                    setCurrentStatus('Compilation successful. Firmware is ready.');
+                    handleFirmwareDownload(job);
+                    
+                    // Continue with the rest of the pipeline
+                    (async () => {
+                      const uploadSuccess = await runPlaceholderStep('upload');
+                      if (uploadSuccess) {
+                        await runPlaceholderStep('verify');
+                      }
+                      setIsGenerating(false);
+                    })();
+                } else if (job.status === 'failed') {
+                    updatePipeline('compile', 'failed');
+                    const errorMsg = job.error || 'An unknown compilation error occurred.';
+                    setCurrentStatus(`Compilation Failed: ${errorMsg}`);
+                    const errorDescription = (
+                        <div>
+                            <p className="font-semibold">Compilation failed. See details below:</p>
+                            <pre className="mt-2 w-full rounded-md bg-destructive/20 p-4 text-destructive-foreground whitespace-pre-wrap font-code text-xs">
+                                {errorMsg}
+                            </pre>
+                        </div>
+                    );
+                    toast({ title: 'Compilation Failed', description: errorDescription, variant: 'destructive', duration: 20000 });
+                    setIsGenerating(false);
+                }
+            }
         }
-      } else {
-        // If we can't get job status, stop polling to avoid spamming.
-        stopPolling();
+    };
+
+    eventSourceRef.current.onerror = (err) => {
+        console.error('EventSource failed:', err);
+        stopStreaming();
         updatePipeline('compile', 'failed');
-        const errorMsg = statusRes.error || 'Failed to get compilation status.';
+        const errorMsg = 'Connection to compilation server lost.';
         setCurrentStatus(errorMsg);
         toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
         setIsGenerating(false);
-      }
-    }, 3000); // Poll every 3 seconds
+    };
   };
   
   const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile'>): Promise<boolean> => {
@@ -241,7 +243,7 @@ export default function Home() {
       await visPromise; // Wait for visualizer to finish
 
       if (jobId) {
-        pollCompilationStatus(jobId);
+        streamCompilationStatus(jobId);
       } else {
         // Compilation failed to start, stop the process
         setIsGenerating(false);
@@ -256,7 +258,7 @@ export default function Home() {
       }
       toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });
       setIsGenerating(false);
-      stopPolling();
+      stopStreaming();
     }
   };
   
@@ -265,7 +267,7 @@ export default function Home() {
     if (step === 'compile') {
       const jobId = await runCompileStep();
       if (jobId) {
-        pollCompilationStatus(jobId);
+        streamCompilationStatus(jobId);
       } else {
         setIsGenerating(false);
       }
@@ -340,3 +342,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

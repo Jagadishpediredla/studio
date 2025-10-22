@@ -30,6 +30,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  env: {
+    NEXT_PUBLIC_COMPILATION_API_URL: process.env.COMPILATION_API_URL,
+    NEXT_PUBLIC_COMPILATION_API_KEY: process.env.COMPILATION_API_KEY,
+  },
 };
 
 export default nextConfig;
+
+    
