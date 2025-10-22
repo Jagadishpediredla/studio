@@ -139,9 +139,8 @@ export default function Home() {
 
   const streamCompilationStatus = (jobId: string) => {
     stopStreaming();
-    // Use NEXT_PUBLIC_ for client-side env vars
-    const API_URL = process.env.NEXT_PUBLIC_COMPILATION_API_URL || process.env.COMPILATION_API_URL || 'http://localhost:3001';
-    const API_KEY = process.env.NEXT_PUBLIC_COMPILATION_API_KEY || process.env.COMPILATION_API_KEY;
+    const API_URL = process.env.NEXT_PUBLIC_COMPILATION_API_URL || 'http://localhost:3001';
+    const API_KEY = process.env.NEXT_PUBLIC_COMPILATION_API_KEY;
     
     if (!API_KEY) {
       const errorMsg = "Compilation API key is not configured on the client.";
@@ -386,5 +385,3 @@ export default function Home() {
     </div>
   );
 }
-
-    

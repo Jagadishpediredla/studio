@@ -104,5 +104,3 @@ export async function getCompilationJobStatus(jobId: string) {
         return { success: false, error: errorMessage };
     }
 }
-
-    
