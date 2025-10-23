@@ -10,11 +10,13 @@ const CLIENT_USER_ID = 'aiot-studio-user';
 const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export async function findActiveDesktopClient(): Promise<{ success: boolean, clientId?: string, error?: string }> {
-  const healthCheckId = `check_cloud-client_${Date.now()}`;
-  const healthCheckRef = ref(database, `health_check/${healthCheckId}`);
+  const healthCheckRef = ref(database, `health_check/cloud-client_${Date.now()}`);
   
   try {
+    // A quick write & remove to verify DB permissions and connection.
     await set(healthCheckRef, { timestamp: Date.now(), client: 'cloud-client' });
+    await remove(healthCheckRef);
+
     const desktopsRef = ref(database, 'desktops');
     const desktopsSnapshot = await get(desktopsRef);
     const desktops = desktopsSnapshot.val();
@@ -35,12 +37,12 @@ export async function findActiveDesktopClient(): Promise<{ success: boolean, cli
 
     return { success: true, clientId: activeClients[0][0] };
 
-  } catch (error: any)
-{
+  } catch (error: any) {
     console.error('[CLOUD] Firebase Health Check Error:', error);
     let errorMessage = `Failed to connect to Firebase or validate permissions. Check your connection, configuration, and database rules. Details: ${error.message}`;
     return { success: false, error: errorMessage };
   } finally {
+    // Ensure cleanup even if other parts fail
     await remove(healthCheckRef).catch(() => {});
   }
 }
@@ -70,9 +72,16 @@ export async function submitCompilationRequest(payload: { code: string; board: s
 }
 
 export async function writeClientLog(logId: string, event: string, message: string, data: object = {}) {
+    if (!logId) {
+        console.warn(`[CLOUD] Attempted to write log but logId is missing. Event: ${event}`);
+        return { success: false, error: "logId is missing" };
+    }
     const timestamp = Date.now();
     try {
-        const clientEventsRef = ref(database, `logs/${logId}/clientSide/events`);
+        const logRef = ref(database, `logs/${logId}`);
+
+        // Write to clientSide/events
+        const clientEventsRef = child(logRef, 'clientSide/events');
         await push(clientEventsRef, {
             timestamp,
             event,
@@ -80,7 +89,8 @@ export async function writeClientLog(logId: string, event: string, message: stri
             data
         });
 
-        const timelineRef = ref(database, `logs/${logId}/timeline`);
+        // Write to shared timeline
+        const timelineRef = child(logRef, 'timeline');
         await push(timelineRef, {
             timestamp,
             source: 'client',
@@ -88,8 +98,10 @@ export async function writeClientLog(logId: string, event: string, message: stri
             message
         });
 
-        const updatedAtRef = ref(database, `logs/${logId}/updatedAt`);
-        await set(updatedAtRef, timestamp);
+        // Update main log timestamp
+        const updatedAtRef = child(logRef, 'updatedAt');
+        await set(updatedAtRef, serverTimestamp());
+        
         return { success: true };
     } catch (error: any) {
         console.error(`[CLOUD] Failed to write client log to Firebase: ${error.message}`);
@@ -97,35 +109,101 @@ export async function writeClientLog(logId: string, event: string, message: stri
     }
 }
 
+export async function performOtaUpdate(
+  firmwareFile: string,
+  deviceId: string,
+  onProgress: (update: OtaProgress) => void
+) {
+  // This is a simulated OTA update process for demonstration purposes.
+  const steps = [
+    { progress: 10, message: `Connecting to device ${deviceId}...` },
+    { progress: 25, message: 'Device connected. Authenticating...' },
+    { progress: 40, message: 'Authenticated. Preparing to send firmware...' },
+    { progress: 60, message: `Sending ${firmwareFile}... (Chunk 1/2)` },
+    { progress: 85, message: `Sending ${firmwareFile}... (Chunk 2/2)` },
+    { progress: 95, message: 'Firmware sent. Verifying checksum...' },
+    { progress: 100, message: 'Verification complete. Rebooting device.' },
+  ];
 
-// Functions below are for the dashboard and are not part of the main compilation workflow yet.
-// They will be updated in a future step.
+  for (const step of steps) {
+    onProgress({ ...step, status: 'uploading' });
+    await new Promise(resolve => setTimeout(resolve, 750));
+  }
 
-export async function getCompilationJobStatus(jobId: string): Promise<{ success: boolean; job?: CompilationJob; error?: string }> {
+  onProgress({ progress: 100, message: 'Update successful!', status: 'success' });
+}
+
+
+// Actions for the Job Dashboard
+export async function getJobs(
+  limit: number = 50, 
+  status?: string, 
+  userId?: string
+): Promise<{ success: boolean; jobs?: JobSummary[], statistics?: JobStatistics, error?: string }> {
     try {
-        const statusRef = ref(database, `status/${jobId}`);
-        const snapshot = await get(statusRef);
-        const data: FirebaseStatusUpdate = snapshot.val();
+        const logsRef = ref(database, 'logs');
+        const jobsQuery = query(logsRef, orderByChild('createdAt'), limitToLast(limit));
         
-        if (!data) {
-            return { success: true, job: undefined };
+        const snapshot = await get(jobsQuery);
+        const allLogsData = snapshot.val() || {};
+        
+        let allJobs: any[] = Object.values(allLogsData);
+
+        // Filter locally
+        if (status) {
+            allJobs = allJobs.filter(job => job.status === status);
         }
-        
-        const job: CompilationJob = {
-            id: jobId,
-            status: data.status,
-            progress: data.progress,
-            message: data.message,
-            phase: data.phase,
-            timestamp: new Date(data.timestamp).toISOString(),
-            logId: data.logId,
-            buildId: data.buildId,
+        if (userId) {
+            // This assumes the clientSide object and userId exist.
+            allJobs = allJobs.filter(job => job.clientSide?.userId === userId);
+        }
+
+        const jobSummaries: JobSummary[] = allJobs.map(log => ({
+            jobId: log.logId, // In the new model, logId is the primary job identifier
+            status: log.status,
+            progress: log.progress || 0, // Fallback for progress
+            createdAt: new Date(log.createdAt).toISOString(),
+            duration: log.metrics?.totalTime,
+            board: log.board,
+            codeLength: log.clientSide?.events?.[0]?.data?.codeLength,
+            sender: { userId: log.clientSide?.userId, source: log.clientSide?.source },
+            buildId: log.buildId,
+        })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); // Most recent first
+
+        const completedJobs = allJobs.filter(j => j.status === 'completed');
+        const totalDuration = completedJobs.reduce((sum, job) => sum + (job.metrics?.totalTime || 0), 0);
+
+        const statistics: JobStatistics = {
+            totalJobs: allJobs.length,
+            completedJobs: completedJobs.length,
+            failedJobs: allJobs.filter(j => j.status === 'failed').length,
+            averageDuration: completedJobs.length > 0 ? totalDuration / completedJobs.length : 0,
         };
 
-        return { success: true, job };
+        return { success: true, jobs: jobSummaries, statistics };
 
     } catch (error: any) {
-        return { success: false, error: `Error fetching job status from Firebase: ${error.message}` };
+        console.error("Failed to fetch jobs from /logs:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function getJobDetails(jobId: string): Promise<any> { // Using `any` for now to match flexible log structure
+    try {
+        const jobRef = ref(database, `logs/${jobId}`);
+        const snapshot = await get(jobRef);
+        const jobData = snapshot.val();
+
+        if (!jobData) {
+            return { success: false, error: `Job log with ID ${jobId} not found.` };
+        }
+        
+        // This data is returned directly, the component will parse the nested structure
+        return { success: true, ...jobData };
+
+    } catch (error: any) {
+        console.error(`Failed to fetch details for job log ${jobId}:`, error);
+        return { success: false, error: error.message };
     }
 }
 
@@ -138,20 +216,7 @@ export async function getBuildInfo(buildId: string): Promise<{ success: boolean;
         if (!buildData) {
             return { success: false, error: `Build ${buildId} not found.` };
         }
-
-        const buildInfo: BuildInfo = {
-            buildId: buildId,
-            requestId: buildData.requestId,
-            board: buildData.board,
-            status: buildData.status,
-            files: buildData.files,
-            totalFiles: buildData.totalFiles,
-            logId: buildData.logId,
-            clientId: buildData.clientId,
-            timestamp: buildData.timestamp,
-        };
-
-        return { success: true, build: buildInfo };
+        return { success: true, build: buildData as BuildInfo };
     } catch (error: any) {
         return { success: false, error: `Error fetching build info from Firebase: ${error.message}` };
     }
@@ -170,75 +235,5 @@ export async function getBinary(buildId: string, fileType: 'hex' | 'bin' | 'elf'
         return { success: true, binary: data.binary, filename: data.filename, size: data.size };
     } catch (error: any) {
         return { success: false, error: `Error fetching binary from Firebase: ${error.message}`};
-    }
-}
-
-
-// Actions for the Job Dashboard
-export async function getJobs(
-  limit: number = 50, 
-  status?: string, 
-  userId?: string
-): Promise<{ success: boolean; jobs?: JobSummary[], statistics?: JobStatistics, error?: string }> {
-    try {
-        const jobsRef = query(ref(database, 'job_logs'), limitToLast(limit));
-        const snapshot = await get(jobsRef);
-        const allJobsData = snapshot.val() || {};
-        
-        let allJobs: JobDetails[] = Object.values(allJobsData);
-
-        // Filter locally
-        if (status) {
-            allJobs = allJobs.filter(job => job.status === status);
-        }
-        if (userId) {
-            allJobs = allJobs.filter(job => job.sender?.userId === userId);
-        }
-
-        const jobSummaries: JobSummary[] = allJobs.map(job => ({
-            jobId: job.jobId,
-            status: job.status,
-            progress: job.progress,
-            createdAt: job.createdAt,
-            duration: job.build?.duration,
-            board: job.hardware?.board,
-            codeLength: job.code?.length,
-            sender: job.sender,
-            buildId: job.build?.buildId,
-        })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); // Most recent first
-
-        const completedJobs = allJobs.filter(j => j.status === 'completed');
-        const totalDuration = completedJobs.reduce((sum, job) => sum + (job.build?.duration || 0), 0);
-
-        const statistics: JobStatistics = {
-            totalJobs: allJobs.length,
-            completedJobs: completedJobs.length,
-            failedJobs: allJobs.filter(j => j.status === 'failed').length,
-            averageDuration: completedJobs.length > 0 ? totalDuration / completedJobs.length : 0,
-        };
-
-        return { success: true, jobs: jobSummaries, statistics };
-
-    } catch (error: any) {
-        console.error("Failed to fetch jobs:", error);
-        return { success: false, error: error.message };
-    }
-}
-
-export async function getJobDetails(jobId: string): Promise<JobDetails | { success: false, error: string }> {
-    try {
-        const jobRef = ref(database, `job_logs/${jobId}`);
-        const snapshot = await get(jobRef);
-        const jobData = snapshot.val();
-
-        if (!jobData) {
-            return { success: false, error: `Job with ID ${jobId} not found.` };
-        }
-        
-        return { success: true, ...jobData };
-
-    } catch (error: any) {
-        console.error(`Failed to fetch details for job ${jobId}:`, error);
-        return { success: false, error: error.message };
     }
 }
