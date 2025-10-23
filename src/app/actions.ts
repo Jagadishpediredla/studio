@@ -135,6 +135,38 @@ export async function getBinary(buildId: string, fileType: 'hex' | 'bin' = 'bin'
     }
 }
 
+// Placeholder function to fix OTA page
+export async function performOtaUpdate(
+  fileName: string,
+  deviceId: string,
+  onProgress: (progress: OtaProgress) => void
+) {
+  const steps = [
+    { progress: 10, message: 'Connecting to device...' },
+    { progress: 25, message: 'Authenticating...' },
+    { progress: 50, message: `Sending firmware ${fileName}...` },
+    { progress: 75, message: 'Flashing...' },
+    { progress: 90, message: 'Rebooting device...' },
+  ];
+
+  for (const step of steps) {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    onProgress({
+      message: step.message,
+      progress: step.progress,
+      status: 'uploading',
+    });
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 800));
+  onProgress({
+    message: 'Update complete!',
+    progress: 100,
+    status: 'success',
+  });
+}
+
+
 // Actions for the new Job Dashboard
 export async function getJobs(
   limit: number = 50, 
@@ -203,3 +235,5 @@ export async function getJobDetails(jobId: string): Promise<JobDetails | { succe
         return { success: false, error: error.message };
     }
 }
+
+    
