@@ -1,8 +1,9 @@
+
 'use server';
 
 import type { BoardInfo, CompilationJob, OtaProgress, FirebaseCompilationJob, FirebaseStatusUpdate } from '@/lib/types';
 import { database } from '@/lib/firebase';
-import { ref, get, set, child } from 'firebase/database';
+import { ref, get, set, child, remove } from 'firebase/database';
 
 
 // A simple, session-specific client ID.
@@ -12,33 +13,51 @@ const CLIENT_ID = 'aiot-studio-session';
 const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export async function checkServerHealth() {
+  const healthCheckId = `check_${CLIENT_ID}_${Date.now()}`;
+  const healthCheckRef = ref(database, `health_check/${healthCheckId}`);
+  const healthCheckPayload = { timestamp: Date.now(), client: CLIENT_ID };
+
   try {
+    // 1. Write a temporary value to the database to test write permissions
+    await set(healthCheckRef, healthCheckPayload);
+
+    // 2. Read the value back to test read permissions
+    const snapshot = await get(healthCheckRef);
+    const data = snapshot.val();
+
+    if (JSON.stringify(data) !== JSON.stringify(healthCheckPayload)) {
+      throw new Error("Read/write validation failed. Data mismatch.");
+    }
+    
+    // 3. If read/write is successful, check for online desktops
     const desktopsRef = ref(database, 'desktops');
-    const snapshot = await get(desktopsRef);
-    const desktops = snapshot.val();
+    const desktopsSnapshot = await get(desktopsRef);
+    const desktops = desktopsSnapshot.val();
 
     if (!desktops) {
-      return { success: false, error: 'No desktop clients are online. Please ensure the desktop bridge is running.' };
+      return { success: false, error: 'Connection to Firebase is OK, but no desktop clients are online. Please ensure the bridge is running.' };
     }
 
     const onlineDesktops = Object.entries(desktops).filter(([_, info]: [string, any]) => {
       if (info.status !== 'online') return false;
       const lastSeen = new Date(info.lastSeen).getTime();
-      // Desktop is online if seen in the last 2 minutes
-      return (Date.now() - lastSeen) < 120000; 
+      return (Date.now() - lastSeen) < 120000; // 2 minutes
     });
 
     if (onlineDesktops.length === 0) {
-      return { success: false, error: 'No active desktop clients found. Please check the bridge connection.' };
+      return { success: false, error: 'Connection to Firebase is OK, but no active desktop clients were found. Check bridge.' };
     }
-    
+
     // Return the ID of the first available desktop client
     return { success: true, desktopId: onlineDesktops[0][0] };
 
   } catch (error: any) {
     console.error('Firebase Health Check Error:', error);
-    let errorMessage = `Failed to connect to Firebase. Check your connection and configuration. Details: ${error.message}`;
+    let errorMessage = `Failed to connect to Firebase or validate permissions. Check your connection, configuration, and database rules. Details: ${error.message}`;
     return { success: false, error: errorMessage };
+  } finally {
+    // 4. Clean up the temporary health check entry
+    await remove(healthCheckRef).catch(() => {}); // Try to clean up, but don't fail the whole operation if it fails
   }
 }
 

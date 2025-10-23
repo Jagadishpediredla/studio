@@ -1,8 +1,9 @@
+
 {
   "rules": {
     "desktops": {
       ".read": true,
-      ".write": true
+      ".write": false
     },
     "requests": {
       ".read": true,
@@ -13,6 +14,10 @@
       ".write": true
     },
     "binaries": {
+      ".read": true,
+      ".write": true
+    },
+    "health_check": {
       ".read": true,
       ".write": true
     }
