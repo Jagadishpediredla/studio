@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { FileText, Clock, BarChart, Server, Cpu, HardDrive, AlertTriangle, CheckCircle, Code, Briefcase } from 'lucide-react';
+import { FileText, Clock, BarChart, Server, Cpu, Briefcase } from 'lucide-react';
 
 interface JobDashboardProps {
   userId: string;
@@ -35,7 +35,6 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
       if (response.success) {
         setJobs(response.jobs || []);
         setStatistics(response.statistics || null);
-        // Automatically select the first job if available
         if ((response.jobs || []).length > 0) {
             loadJobDetails(response.jobs![0].jobId);
         }
@@ -67,7 +66,8 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
   };
   
   const getStatusClass = (status: string) => {
-    switch (status) {
+    const lowerStatus = status.toLowerCase();
+    switch (lowerStatus) {
       case 'completed':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'failed':
@@ -96,7 +96,6 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-full">
-        {/* Statistics Panel */}
         {statistics && (
              <Card className="xl:col-span-3">
                 <CardHeader>
@@ -127,7 +126,6 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
             </Card>
         )}
 
-      {/* Jobs List */}
       <Card className="xl:col-span-1 flex flex-col h-[calc(100vh-220px)]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Briefcase /> Recent Jobs</CardTitle>
@@ -171,7 +169,6 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
         </CardContent>
       </Card>
       
-      {/* Job Details */}
       <Card className="xl:col-span-2 flex flex-col h-[calc(100vh-220px)]">
          <CardHeader>
           <CardTitle className="flex items-center gap-2"><FileText /> Job Details</CardTitle>
@@ -186,7 +183,6 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
              </div>
           ) : selectedJob ? (
             <div className="space-y-6">
-                {/* Basic Info */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                     <div><label className="font-medium text-muted-foreground">Job ID</label><div className="font-mono">{selectedJob.logId}</div></div>
                     <div><label className="font-medium text-muted-foreground">Request ID</label><div className="font-mono">{selectedJob.requestId}</div></div>
@@ -205,14 +201,13 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
                     <div><label className="font-medium text-muted-foreground">User ID</label><div>{selectedJob.clientSide?.userId}</div></div>
                 </div>
                 
-                {/* Timeline */}
-                {selectedJob.timeline && selectedJob.timeline.length > 0 && (
+                {/* Timeline - Convert object to array if needed */}
+                {selectedJob.timeline && (
                     <div>
                         <h3 className="font-semibold mb-4 flex items-center gap-2"><Clock /> Merged Timeline</h3>
                         <div className="relative">
-                            {/* The vertical line */}
                             <div className="absolute left-[7px] h-full w-0.5 bg-border -z-10"></div>
-                             {[...selectedJob.timeline].sort((a,b) => a.timestamp - b.timestamp).map((event, i) => (
+                             {Object.values(selectedJob.timeline).sort((a,b) => a.timestamp - b.timestamp).map((event, i) => (
                                 <TimelineEntry key={i} event={event} />
                             ))}
                         </div>

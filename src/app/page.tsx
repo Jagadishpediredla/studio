@@ -122,7 +122,6 @@ export default function Home() {
   const handleFirmwareDownload = async (buildId: string) => {
     addLog(`[CLOUD] Build complete. Requesting binary for build ${buildId}...`);
     
-    // According to the docs, we should first get build info to know which files are available.
     const buildInfoResult = await getBuildInfo(buildId);
 
     if (!buildInfoResult.success || !buildInfoResult.build) {
@@ -132,7 +131,6 @@ export default function Home() {
       return;
     }
 
-    // Determine which file to download. Let's prefer .hex, then .bin.
     const availableFiles = buildInfoResult.build.files;
     let fileType: 'hex' | 'bin' | 'elf' | undefined;
     if (availableFiles.hex) fileType = 'hex';
@@ -146,7 +144,9 @@ export default function Home() {
         return;
     }
 
+    addLog(`[CLOUD] Downloading file type: ${fileType}`);
     const result = await getBinary(buildId, fileType);
+
     if (!result.success || !result.binary) {
       const errorMsg = `Download Failed: ${result.error || 'No binary data found.'}`;
       addLog(`[CLOUD] ${errorMsg}`, 'error');
@@ -172,14 +172,15 @@ export default function Home() {
 
     const successMsg = `Firmware "${a.download}" downloaded successfully.`;
     addLog(`[CLOUD] ${successMsg}`, 'success');
-    await writeClientLog(jobStateRef.current.logId, 'binaries_downloaded', 'All binaries downloaded from Firebase', { fileCount: 1 });
+    await writeClientLog(jobStateRef.current.logId, 'binaries_downloaded', 'All binaries downloaded from Firebase', { fileCount: 1, filename: a.download });
     toast({ title: 'Success', description: successMsg });
   };
 
 
   const runCompileStep = async (desktopId: string): Promise<string | null> => {
     updatePipeline('compile', 'processing');
-    addLog(`[CLOUD] Submitting job to desktop client '${desktopId}'...`);
+    const logMessage = `[CLOUD] Submitting job to desktop client '${desktopId}'...`;
+    addLog(logMessage);
     
     const payload = { code, board: boardInfo.fqbn, libraries: boardInfo.libraries, desktopId };
     
@@ -187,8 +188,10 @@ export default function Home() {
 
     if (result.success && result.requestId) {
       jobStateRef.current.requestId = result.requestId;
-      addLog(`[FIREBASE] Wrote to /requests/${desktopId}/${result.requestId}`, 'success');
+      const firebaseLogMsg = `[FIREBASE] Wrote to /requests/${desktopId}/${result.requestId}`;
+      addLog(firebaseLogMsg, 'success');
       addLog(`[CLOUD] Job submitted with ID: ${result.requestId}. Waiting for acknowledgment...`);
+      // We will write the 'request_submitted' log event AFTER we get the logId
       return result.requestId;
     } else {
       updatePipeline('compile', 'failed');
@@ -205,32 +208,37 @@ export default function Home() {
   };
 
   const monitorCompilationStatus = (requestId: string, submitTime: number) => {
-    cleanupListeners(); // Clear any existing listeners or timeouts
+    cleanupListeners();
 
     const statusRef = ref(database, `status/${requestId}`);
+    addLog(`[CLOUD] Listening to Firebase: /status/${requestId}`);
     
     const onStatusUpdate = async (snapshot: any) => {
         const status: FirebaseStatusUpdate = snapshot.val();
         if (!status) return;
 
-        // As soon as we get the first update, kill the timeout. The job is alive.
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = undefined;
         }
 
-        // --- Capture logId and buildId from the FIRST server update ---
         if (!jobStateRef.current.logId && status.logId) {
             jobStateRef.current.logId = status.logId;
             jobStateRef.current.buildId = status.buildId;
-            addLog(`[CLOUD] Desktop client acknowledged request. Received Log ID: ${status.logId}`);
+            const ackMsg = `[CLOUD] Desktop client acknowledged request. Received Log ID: ${status.logId}`;
+            addLog(ackMsg);
+            
+            // Per docs: Now that we have logId, write the client-side events
+            await writeClientLog(status.logId, 'request_submitted', 'Compilation request submitted by client', {
+                codeLength: code.length,
+                board: boardInfo.fqbn,
+            });
             await writeClientLog(status.logId, 'acknowledgment_received', 'Desktop client acknowledged request', {
                 responseTime: Date.now() - submitTime,
                 clientId: status.clientId
             });
         }
         
-        // --- Log status changes to our unified log ---
         if (status.status !== jobStateRef.current.lastStatus && jobStateRef.current.logId) {
             jobStateRef.current.lastStatus = status.status;
              await writeClientLog(jobStateRef.current.logId, `status_update_${status.status}`, `Status: ${status.message}`, {
@@ -240,18 +248,17 @@ export default function Home() {
             });
         }
 
-        // --- Update UI ---
         const serverLog = `[DESKTOP] [${status.phase}] ${status.status} (${status.progress}%) - ${status.message}`;
         addLog(serverLog, status.status === 'failed' ? 'error' : 'info');
 
-        // --- Handle job completion or failure ---
         if (status.status === 'completed') {
             cleanupListeners();
             updatePipeline('compile', 'completed');
             addLog('[DESKTOP] Compilation successful. Fetching build information...', 'success');
             
-            const buildId = jobStateRef.current.buildId || status.buildId; // Use the stored or latest buildId
+            const buildId = jobStateRef.current.buildId || status.buildId;
             if (buildId) {
+              await writeClientLog(jobStateRef.current.logId, 'job_completed', 'Job completed successfully on desktop client');
               await handleFirmwareDownload(buildId);
               const uploadSuccess = await runPlaceholderStep('upload');
               if (uploadSuccess) {
@@ -276,13 +283,15 @@ export default function Home() {
                     </pre>
                 </div>
             );
+            if (jobStateRef.current.logId) {
+              await writeClientLog(jobStateRef.current.logId, 'job_failed', 'Job failed on desktop client', { error: status.message, errorDetails: status.errorDetails });
+            }
             toast({ title: 'Compilation Failed', description: errorDescription, variant: 'destructive', duration: 20000 });
             setIsGenerating(false);
         }
     };
     
-    // Attach listener and store the cleanup function
-    const unsubscribe = onValue(statusRef, onStatusUpdate, (error) => {
+    statusListenerUnsubscribeRef.current = onValue(statusRef, onStatusUpdate, (error) => {
         cleanupListeners();
         updatePipeline('compile', 'failed');
         const errorMsg = `Firebase listener error: ${error.message}`;
@@ -291,24 +300,25 @@ export default function Home() {
         setIsGenerating(false);
     });
 
-    statusListenerUnsubscribeRef.current = () => {
-        off(statusRef, 'value'); // A more robust way to remove the listener
-        unsubscribe();
-    };
-
-    // Set a 3-minute timeout for the entire job
     timeoutRef.current = setTimeout(() => {
         cleanupListeners();
-        if (pipelineStatus.compile !== 'completed') {
-            updatePipeline('compile', 'failed');
-            const errorMsg = 'Job timed out after 3 minutes. The desktop client did not respond or complete in time.';
-            addLog(`[CLOUD] Error: ${errorMsg}`, 'error');
-            if (jobStateRef.current.logId) {
-                writeClientLog(jobStateRef.current.logId, 'timeout', 'Job timed out after 3 minutes');
+        // Only fail if it's still in a processing state
+        setPipelineStatus(prev => {
+            if (prev.compile === 'processing' || prev.compile === 'pending') {
+                const errorMsg = 'Job timed out after 3 minutes. The desktop client did not respond or complete in time.';
+                addLog(`[CLOUD] Error: ${errorMsg}`, 'error');
+                if (jobStateRef.current.logId) {
+                    writeClientLog(jobStateRef.current.logId, 'timeout', 'Job timeout after 3 minutes');
+                } else {
+                     // If we don't even have a logId, we can't write a log.
+                     console.error("Timeout occurred before logId was received.");
+                }
+                toast({ title: 'Job Timeout', description: errorMsg, variant: 'destructive' });
+                setIsGenerating(false);
+                return { ...prev, compile: 'failed' };
             }
-            toast({ title: 'Job Timeout', description: errorMsg, variant: 'destructive' });
-            setIsGenerating(false);
-        }
+            return prev;
+        });
     }, 180000); // 180 seconds = 3 minutes
   };
   
@@ -378,15 +388,13 @@ export default function Home() {
       
       toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
 
-      // Start automated pipeline
       const submitTime = Date.now();
       const requestId = await runCompileStep(health.clientId);
-      await visPromise; // Wait for visualizer to finish
+      await visPromise;
 
       if (requestId) {
         monitorCompilationStatus(requestId, submitTime);
       } else {
-        // Compilation failed to start, stop the process
         setIsGenerating(false);
       }
 
@@ -395,7 +403,7 @@ export default function Home() {
       const message = error.message || 'An error occurred during the pipeline.';
       if (pipelineStatus.codeGen !== 'completed') {
         updatePipeline('codeGen', 'failed');
-        setHistory(prev => prev.slice(1)); // Revert history only if code gen failed
+        setHistory(prev => prev.slice(1));
       }
       addLog(`[CLOUD] Pipeline Failed: ${message}`, 'error');
       toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });
@@ -509,5 +517,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
