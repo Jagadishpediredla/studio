@@ -36,7 +36,8 @@ export async function checkServerHealth() {
     return { success: true, desktopId: onlineDesktops[0][0] };
 
   } catch (error: any) {
-    let errorMessage = `Failed to connect to Firebase. Check your connection and configuration.`;
+    console.error('Firebase Health Check Error:', error);
+    let errorMessage = `Failed to connect to Firebase. Check your connection and configuration. Details: ${error.message}`;
     return { success: false, error: errorMessage };
   }
 }
