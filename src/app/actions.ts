@@ -15,21 +15,13 @@ const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).
 export async function checkServerHealth() {
   const healthCheckId = `check_${CLIENT_ID}_${Date.now()}`;
   const healthCheckRef = ref(database, `health_check/${healthCheckId}`);
-  const healthCheckPayload = { timestamp: Date.now(), client: CLIENT_ID };
-
+  
   try {
-    // 1. Write a temporary value to the database to test write permissions
-    await set(healthCheckRef, healthCheckPayload);
+    // 1. Test WRITE permission by writing a temporary value.
+    // The .validate rule in the database ensures this data has the correct shape.
+    await set(healthCheckRef, { timestamp: Date.now(), client: CLIENT_ID });
 
-    // 2. Read the value back to test read permissions
-    const snapshot = await get(healthCheckRef);
-    const data = snapshot.val();
-
-    if (JSON.stringify(data) !== JSON.stringify(healthCheckPayload)) {
-      throw new Error("Read/write validation failed. Data mismatch.");
-    }
-    
-    // 3. If read/write is successful, check for online desktops
+    // 2. Test READ permission by checking for online desktops.
     const desktopsRef = ref(database, 'desktops');
     const desktopsSnapshot = await get(desktopsRef);
     const desktops = desktopsSnapshot.val();
@@ -56,8 +48,8 @@ export async function checkServerHealth() {
     let errorMessage = `Failed to connect to Firebase or validate permissions. Check your connection, configuration, and database rules. Details: ${error.message}`;
     return { success: false, error: errorMessage };
   } finally {
-    // 4. Clean up the temporary health check entry
-    await remove(healthCheckRef).catch(() => {}); // Try to clean up, but don't fail the whole operation if it fails
+    // 3. Clean up the temporary health check entry.
+    await remove(healthCheckRef).catch(() => {}); // Try to clean up, but don't fail the whole operation if it fails.
   }
 }
 

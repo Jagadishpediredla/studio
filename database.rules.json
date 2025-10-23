@@ -18,8 +18,11 @@
       ".write": true
     },
     "health_check": {
-      ".read": true,
-      ".write": true
+      "$uid": {
+        ".write": true,
+        ".read": true,
+        ".validate": "newData.hasChildren(['timestamp', 'client']) && newData.getPriority() === null"
+      }
     }
   }
 }
