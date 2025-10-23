@@ -5,8 +5,8 @@ import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
-import { checkServerHealth, startCompilation, getCompilationJobStatus, getBinary } from '@/app/actions';
-import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, CompilationJob, StatusUpdate } from '@/lib/types';
+import { checkServerHealth, startCompilation, getCompilationJobStatus, getBuildInfo, getBinary } from '@/app/actions';
+import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, CompilationJob, StatusUpdate, BuildInfo } from '@/lib/types';
 
 import AppHeader from '@/components/app-header';
 import AiControls from '@/components/ai-controls';
@@ -84,10 +84,11 @@ export default function Home() {
     return () => stopPolling();
   }, []);
   
-  const handleFirmwareDownload = async (jobId: string) => {
-    const result = await getBinary(jobId);
+  const handleFirmwareDownload = async (buildId: string) => {
+    const result = await getBinary(buildId, 'bin'); // Default to .bin for ESP32
     if (!result.success || !result.binary) {
       toast({ title: 'Download Failed', description: result.error || 'No binary data found.', variant: 'destructive' });
+      setCurrentStatus(`Download Failed: ${result.error || 'No binary data found.'}`);
       return;
     }
     
@@ -159,15 +160,12 @@ export default function Home() {
       const job: CompilationJob | undefined = result.job;
 
       if (!job) {
-        // This is the key change: handle the "waiting" state explicitly.
         setCurrentStatus(`Job ${jobId}: Waiting for desktop client to pick up the request...`);
         return;
       }
       
-      // We have a status, so the desktop client is responding.
-      const newLog: StatusUpdate = { message: job.message, timestamp: job.createdAt, type: job.status === 'failed' ? 'error' : 'info' };
+      const newLog: StatusUpdate = { message: job.message, timestamp: job.timestamp, type: job.status === 'failed' ? 'error' : 'info' };
       setCompilationLogs(prev => {
-        // Avoid adding duplicate logs
         if (prev.some(log => log.message === newLog.message)) return prev;
         return [...prev, newLog];
       });
@@ -176,22 +174,30 @@ export default function Home() {
       if (job.status === 'completed') {
         stopPolling();
         updatePipeline('compile', 'completed');
-        setCurrentStatus('Compilation successful. Firmware is ready.');
+        setCurrentStatus('Compilation successful. Fetching build information...');
         
-        handleFirmwareDownload(job.id);
-        
-        (async () => {
+        // New step: Get build info, then download binary
+        const buildInfoResult = await getBuildInfo(jobId);
+        if (buildInfoResult.success && buildInfoResult.build) {
+          const buildId = buildInfoResult.build.buildId;
+          setCurrentStatus(`Build ${buildId} found. Downloading firmware...`);
+          await handleFirmwareDownload(buildId);
           const uploadSuccess = await runPlaceholderStep('upload');
           if (uploadSuccess) {
             await runPlaceholderStep('verify');
           }
-          setIsGenerating(false);
-        })();
+        } else {
+          updatePipeline('compile', 'failed');
+          const errorMsg = buildInfoResult.error || 'Failed to retrieve build info after compilation.';
+          setCurrentStatus(`Error: ${errorMsg}`);
+          toast({ title: 'Build Info Failed', description: errorMsg, variant: 'destructive' });
+        }
+        setIsGenerating(false);
 
       } else if (job.status === 'failed') {
         stopPolling();
         updatePipeline('compile', 'failed');
-        const errorMsg = job.error || 'An unknown compilation error occurred.';
+        const errorMsg = job.message || 'An unknown compilation error occurred.';
         setCurrentStatus(`Compilation Failed: ${errorMsg}`);
         const errorDescription = (
             <div>

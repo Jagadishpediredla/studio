@@ -1,9 +1,9 @@
 
 'use server';
 
-import type { BoardInfo, CompilationJob, OtaProgress, FirebaseStatusUpdate } from '@/lib/types';
+import type { BoardInfo, CompilationJob, OtaProgress, FirebaseStatusUpdate, BuildInfo } from '@/lib/types';
 import { database } from '@/lib/firebase';
-import { ref, get, set, child, remove } from 'firebase/database';
+import { ref, get, set, child, remove, query, orderByChild, equalTo } from 'firebase/database';
 
 
 // A simple, session-specific client ID.
@@ -43,7 +43,8 @@ export async function checkServerHealth() {
     // Return the ID of the first available desktop client
     return { success: true, desktopId: onlineDesktops[0][0] };
 
-  } catch (error: any) {
+  } catch (error: any)
+{
     console.error('Firebase Health Check Error:', error);
     let errorMessage = `Failed to connect to Firebase or validate permissions. Check your connection, configuration, and database rules. Details: ${error.message}`;
     return { success: false, error: errorMessage };
@@ -59,7 +60,6 @@ export async function startCompilation(payload: { code: string; board: BoardInfo
   
   try {
     const requestRef = ref(database, `requests/${desktopId}/${requestId}`);
-    // SIMPLE API: Payload should be simple.
     await set(requestRef, {
         code: code,
         board: board.fqbn,
@@ -81,20 +81,18 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
         const data: FirebaseStatusUpdate = snapshot.val();
         
         if (!data) {
-            // SIMPLE API: If there's no data, it means the job hasn't been picked up.
+            // If there's no data, it means the job hasn't been picked up.
             // Return undefined so the UI can show a "waiting" message.
             return { success: true, job: undefined };
         }
         
-        // SIMPLE API: Adapt simple FirebaseStatusUpdate to the CompilationJob
+        // Adapt simple FirebaseStatusUpdate to the CompilationJob
         const job: CompilationJob = {
             id: jobId,
             status: data.status,
             progress: data.progress,
             message: data.message,
-            createdAt: new Date(data.timestamp).toISOString(),
-            completedAt: data.status === 'completed' ? new Date(data.timestamp).toISOString() : undefined,
-            error: data.status === 'failed' ? data.message : undefined,
+            timestamp: new Date(data.timestamp).toISOString(),
         };
 
         return { success: true, job };
@@ -104,14 +102,42 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
     }
 }
 
-export async function getBinary(jobId: string) {
+export async function getBuildInfo(requestId: string): Promise<{ success: boolean; build?: BuildInfo; error?: string }> {
     try {
-        const binaryRef = ref(database, `binaries/${jobId}`);
+        const buildsRef = query(ref(database, 'builds'), orderByChild('requestId'), equalTo(requestId));
+        const snapshot = await get(buildsRef);
+        const builds = snapshot.val();
+
+        if (!builds) {
+            return { success: false, error: 'Build not found for the given request ID.' };
+        }
+
+        const buildId = Object.keys(builds)[0];
+        const buildData = builds[buildId];
+
+        const buildInfo: BuildInfo = {
+            buildId: buildId,
+            requestId: buildData.requestId,
+            board: buildData.board,
+            status: buildData.status,
+            files: buildData.files,
+        };
+
+        return { success: true, build: buildInfo };
+    } catch (error: any) {
+        return { success: false, error: `Error fetching build info from Firebase: ${error.message}` };
+    }
+}
+
+
+export async function getBinary(buildId: string, fileType: 'hex' | 'bin' = 'bin') {
+    try {
+        const binaryRef = ref(database, `binaries/${buildId}/${fileType}`);
         const snapshot = await get(binaryRef);
         const data = snapshot.val();
         
         if (!data || !data.binary) {
-            return { success: false, error: 'Binary not found in database.'};
+            return { success: false, error: `Binary for file type '${fileType}' not found in database.`};
         }
         
         return { success: true, binary: data.binary, filename: data.filename, size: data.size };

@@ -22,32 +22,40 @@ export type HistoryItem = {
   timestamp: Date;
 };
 
-export type CompilationJobStatus = 'created' | 'preparing' | 'compiling' | 'completed' | 'failed' | 'canceled' | 'submitted' | 'received';
-
-// SIMPLE API: Represents a log entry or a status update message.
+// Represents a log entry or a status update message.
 export interface StatusUpdate {
   timestamp: string; // ISO 8601 string
   message: string;
   type: 'info' | 'success' | 'error';
 }
 
-// SIMPLE API: Represents the direct status object from Firebase
+// Represents the direct status object from Firebase
 export interface FirebaseStatusUpdate {
-  status: CompilationJobStatus;
+  status: 'acknowledged' | 'preparing' | 'compiling' | 'uploading' | 'completed' | 'failed';
   message: string;
   progress?: number;
   timestamp: number;
 }
     
-// SIMPLE API: Simplified CompilationJob for the frontend
+// Simplified CompilationJob for the frontend
 export interface CompilationJob {
   id: string;
-  status: CompilationJobStatus;
+  status: 'acknowledged' | 'preparing' | 'compiling' | 'uploading' | 'completed' | 'failed';
   progress?: number;
   message: string;
-  createdAt: string; // ISO 8601 string
-  completedAt?: string; // ISO 8601 string
-  error?: string | null;
+  timestamp: string; // ISO 8601 string
+}
+
+export interface BuildInfo {
+    buildId: string;
+    requestId: string;
+    board: string;
+    status: 'completed' | 'failed';
+    files: Record<string, {
+        filename: string;
+        size: number;
+        checksum: string;
+    }>;
 }
 
 export interface OtaProgress {
