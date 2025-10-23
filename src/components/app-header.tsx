@@ -8,11 +8,11 @@ import DeploymentPipeline from "@/components/deployment-pipeline";
 import StatusIndicator from "@/components/status-indicator";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
-import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket } from "lucide-react";
+import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, ServerCrash } from "lucide-react";
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   pipelineStatus: PipelineStatus;
-  onManualAction: (step: keyof Omit<PipelineStatus, 'codeGen'>) => void;
+  onManualAction: (step: keyof Omit<PipelineStatus, 'codeGen'> | 'testConnection') => void;
   onShowHistory: () => void;
   isGenerating: boolean;
   currentStatus: string;
@@ -49,7 +49,8 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
                     strokeWidth="16"
                   />
                   <path
-                    d="M168,140a7.8,7.8,0,0,1-8,8,12,12,0,0,1-12-12,8,8,0,0,1,16,0,12,12,0,0,1-12,12,7.8,7.8,0,0,1-8-8"
+                    d="M168,140a7.8,7.8
+,0,0,1-8,8,12,12,0,0,1-12-12,8,8,0,0,1,16,0,12,12,0,0,1-12,12,7.8,7.8,0,0,1-8-8"
                     fill="none"
                     stroke="currentColor"
                     strokeLinecap="round"
@@ -94,6 +95,9 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                 <DropdownMenuItem onClick={() => onManualAction('testConnection')} disabled={isActionInProgress}>
+                  <Wifi className="mr-2 h-4 w-4" /> Test Firebase Connection
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/ota">
                     <Rocket className="mr-2 h-4 w-4" />

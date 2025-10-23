@@ -121,6 +121,7 @@ export default function Home() {
     if (result.success && result.jobId) {
       const logMessage = `Compilation job submitted with ID: ${result.jobId}`;
       setCurrentStatus(logMessage);
+      setCompilationLogs(prev => [...prev, { jobId: result.jobId, type: 'info', message: logMessage, timestamp: new Date().toISOString() }]);
       return result.jobId;
     } else {
       updatePipeline('compile', 'failed');
@@ -143,13 +144,12 @@ export default function Home() {
     pollingIntervalRef.current = setInterval(async () => {
       const result = await getCompilationJobStatus(jobId);
       
-      // If result is not successful, it means there was a Firebase connection error
       if (!result.success) {
         stopPolling();
         updatePipeline('compile', 'failed');
         const errorMsg = result.error || 'Failed to get job status from Firebase.';
         setCurrentStatus(`Error: ${errorMsg}`);
-        setCompilationLogs(prev => [...prev, { jobId: '', type: 'error', message: `Error: ${errorMsg}`, timestamp: new Date().toISOString() }]);
+        setCompilationLogs(prev => [...prev, { jobId, type: 'error', message: `Error: ${errorMsg}`, timestamp: new Date().toISOString() }]);
         toast({ title: 'Polling Error', description: errorMsg, variant: 'destructive' });
         setIsGenerating(false);
         return;
@@ -157,13 +157,14 @@ export default function Home() {
       
       const job: CompilationJob | undefined = result.job;
 
-      // If job is undefined, it means we are waiting for the desktop client to pick it up.
       if (!job) {
         setCurrentStatus(`Job ${jobId}: Waiting for desktop client to pick up the request...`);
         return;
       }
       
-      setCompilationLogs(job.statusUpdates || []);
+      if(job.statusUpdates) {
+        setCompilationLogs(job.statusUpdates);
+      }
       const latestLog = job.statusUpdates && job.statusUpdates.length > 0
         ? job.statusUpdates[job.statusUpdates.length - 1]
         : null;
@@ -180,7 +181,6 @@ export default function Home() {
             toast({ title: 'Error', description: 'Compilation completed but no result found.', variant: 'destructive' });
         }
         
-        // Continue with the rest of the pipeline
         (async () => {
           const uploadSuccess = await runPlaceholderStep('upload');
           if (uploadSuccess) {
@@ -205,7 +205,6 @@ export default function Home() {
         toast({ title: 'Compilation Failed', description: errorDescription, variant: 'destructive', duration: 20000 });
         setIsGenerating(false);
       }
-      // If status is other states, the interval will simply continue to the next poll.
 
     }, 3000); // Poll every 3 seconds
   };
@@ -236,25 +235,23 @@ export default function Home() {
     }
     setIsGenerating(true);
     setPipelineStatus({ codeGen: 'pending', compile: 'pending', upload: 'pending', verify: 'pending' });
-    setCurrentStatus('Starting process...');
     setCompilationLogs([]);
-
-    // --- Pre-flight Health Check ---
-    setCurrentStatus('Checking for available desktop clients via Firebase...');
+    setCurrentStatus('Starting code generation pipeline...');
+    
     const health = await checkServerHealth();
 
     if (!health.success || !health.desktopId) {
+      updatePipeline('compile', 'failed');
       const errorMessage = health.error || 'No online desktop clients found.';
-      setCurrentStatus(errorMessage);
+      setCurrentStatus(`Error: ${errorMessage}`);
       setCompilationLogs(prev => [...prev, { jobId: '', type: 'error', message: `Error: ${errorMessage}`, timestamp: new Date().toISOString() }]);
-      toast({ title: 'No Clients Ready', description: errorMessage, variant: 'destructive', duration: 20000 });
+      toast({ title: 'Health Check Failed', description: errorMessage, variant: 'destructive', duration: 20000 });
       setIsGenerating(false);
-      setPipelineStatus({ codeGen: 'pending', compile: 'failed', upload: 'pending', verify: 'pending' });
       return;
     }
+
     setCurrentStatus(`Found online client: ${health.desktopId}. Starting code generation.`);
     setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: `Desktop client ${health.desktopId} is online.`, timestamp: new Date().toISOString() }]);
-    // --- End Health Check ---
 
     updatePipeline('codeGen', 'processing');
     setCurrentStatus('Generating code with AI...');
@@ -302,6 +299,16 @@ export default function Home() {
     }
   };
   
+  const handleTestConnection = async () => {
+    toast({ title: 'Testing Connection', description: 'Checking connection to Firebase and desktop bridge...' });
+    const health = await checkServerHealth();
+    if (health.success && health.desktopId) {
+      toast({ title: 'Connection Successful', description: `Successfully connected to desktop client: ${health.desktopId}` });
+    } else {
+      toast({ title: 'Connection Failed', description: health.error || 'Could not connect to desktop client.', variant: 'destructive' });
+    }
+  };
+
   const handleManualAction = async (step: keyof Omit<PipelineStatus, 'codeGen'>) => {
     setIsGenerating(true);
     if (step === 'compile') {
@@ -317,6 +324,9 @@ export default function Home() {
       } else {
         setIsGenerating(false);
       }
+    } else if (step === 'testConnection') {
+      await handleTestConnection();
+      setIsGenerating(false);
     } else {
       await runPlaceholderStep(step);
       setIsGenerating(false);
