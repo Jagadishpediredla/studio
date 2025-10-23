@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -91,10 +92,10 @@ export default function IntelligencePanel({
                 <ScrollArea className="h-full w-full">
                   <div className="p-4 font-code text-xs bg-black h-full">
                     {compilationLogs.map((log, index) => (
-                      <p key={index} className={cn("whitespace-pre-wrap leading-relaxed", getLogColor(log.type))}>
+                      <div key={index} className={cn("whitespace-pre-wrap leading-relaxed", getLogColor(log.type))}>
                         <span className="text-gray-500 mr-2">{new Date(log.timestamp).toLocaleTimeString()}</span>
                         &gt; {log.message}
-                      </p>
+                      </div>
                     ))}
                     <div ref={logsEndRef} />
                   </div>

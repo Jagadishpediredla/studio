@@ -1,5 +1,4 @@
 
-
 export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
 
 export type PipelineStatus = {
@@ -25,24 +24,31 @@ export type HistoryItem = {
 
 export type CompilationJobStatus = 'created' | 'preparing' | 'compiling' | 'completed' | 'failed' | 'canceled' | 'submitted' | 'received';
 
-// Represents one log entry from the server's status updates, aligned with the new API
+// Simple status update from Firebase, as per the new "SIMPLE API USAGE GUIDE"
 export interface StatusUpdate {
   timestamp: string; // ISO 8601 string
   message: string;
   type: 'info' | 'success' | 'error';
-  details?: any;
-  jobId: string;
 }
 
+// Represents a job status object from Firebase
+export interface FirebaseStatusUpdate {
+  status: CompilationJobStatus;
+  message: string;
+  progress?: number;
+  timestamp: number;
+}
+    
+// Simplified CompilationJob for the frontend, based on the simple API
 export interface CompilationJob {
   id: string;
   status: CompilationJobStatus;
   progress?: number;
-  statusUpdates: StatusUpdate[];
+  message: string;
   createdAt: string; // ISO 8601 string
   completedAt?: string; // ISO 8601 string
   result?: {
-    binary: string; // This is not the data itself, just a marker.
+    binary: string;
     filename: string;
     size: number;
   };
@@ -54,29 +60,3 @@ export interface OtaProgress {
     progress: number;
     status: 'uploading' | 'success' | 'failed';
 }
-
-// Data structures from the Enhanced Firebase Bridge API
-export interface FirebaseHistoryEntry {
-  message: string;
-  timestamp: number;
-  type: 'info' | 'success' | 'error';
-}
-
-export interface FirebaseStatusUpdate {
-  status: CompilationJobStatus;
-  message: string;
-  progress?: number;
-  elapsed?: number;
-  timestamp: number;
-  history?: FirebaseHistoryEntry[];
-  result?: {
-    filename: string;
-    size: number;
-  };
-  enhanced?: {
-    phase: string;
-    totalUpdates: number;
-    totalTime?: number;
-  };
-}
-    

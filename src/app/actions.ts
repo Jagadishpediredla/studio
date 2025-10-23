@@ -67,10 +67,6 @@ export async function startCompilation(payload: { code: string; board: BoardInfo
         clientInfo: {
             id: CLIENT_ID,
             userAgent: 'AIoT Studio Web App',
-            url: 'https://studio.firebase.google.com',
-            timestamp: new Date().toISOString(),
-            enhanced: true,
-            expectsInstantAck: true,
         }
     });
 
@@ -91,33 +87,20 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
             return { success: true, job: undefined }; // Job not started or acknowledged yet
         }
         
-        // Adapt FirebaseStatusUpdate to CompilationJob according to the new enhanced API documentation
+        // Adapt simple FirebaseStatusUpdate to the CompilationJob
         const job: CompilationJob = {
             id: jobId,
             status: data.status,
             progress: data.progress,
-            // If history exists, map it. Otherwise, create a single entry from the main status.
-            statusUpdates: data.history ? data.history.map(h => ({
-                jobId: jobId,
-                message: h.message,
-                timestamp: new Date(h.timestamp).toISOString(),
-                type: h.type,
-                details: {}
-            })) : [{
-                jobId,
-                message: data.message,
-                timestamp: new Date(data.timestamp).toISOString(),
-                type: data.status === 'failed' ? 'error' : (data.status === 'completed' ? 'success' : 'info'),
-                details: {}
-            }],
-            createdAt: new Date(data.timestamp).toISOString(), // Approximate from first update
+            message: data.message,
+            createdAt: new Date(data.timestamp).toISOString(),
+            completedAt: data.status === 'completed' ? new Date(data.timestamp).toISOString() : undefined,
             error: data.status === 'failed' ? data.message : undefined,
             result: data.status === 'completed' ? {
-                binary: '', // This is just a placeholder; binary is fetched separately
-                filename: data.result?.filename || 'firmware.bin',
-                size: data.result?.size || 0,
+                binary: '', 
+                filename: 'firmware.bin', // Default filename, actual will come from binaries path
+                size: 0,
             } : undefined,
-            completedAt: data.status === 'completed' ? new Date(data.timestamp).toISOString() : undefined,
         };
 
         return { success: true, job };
@@ -137,7 +120,7 @@ export async function getBinary(jobId: string) {
             return { success: false, error: 'Binary not found in database.'};
         }
         
-        return { success: true, binary: data.binary, filename: data.filename };
+        return { success: true, binary: data.binary, filename: data.filename, size: data.size };
     } catch (error: any) {
         return { success: false, error: `Error fetching binary from Firebase: ${error.message}`};
     }
@@ -193,7 +176,3 @@ export async function performOtaUpdate(
     }
   }, accumulatedDelay + 1000);
 }
-
-    
-
-    
