@@ -1,6 +1,6 @@
 'use server';
 
-import type { BoardInfo, CompilationJob } from '@/lib/types';
+import type { BoardInfo, CompilationJob, OtaProgress } from '@/lib/types';
 
 interface CompilePayload {
   code: string;
@@ -120,4 +120,55 @@ export async function getCompilationJobStatus(jobId: string) {
         }
         return { success: false, error: errorMessage };
     }
+}
+
+
+export async function performOtaUpdate(
+  fileName: string,
+  deviceId: string,
+  onProgress: (update: OtaProgress) => void
+) {
+  const steps = [
+    { message: `Connecting to device ${deviceId}...`, duration: 1500, progress: 10 },
+    { message: 'Authenticating...', duration: 1000, progress: 20 },
+    { message: 'Device authenticated. Preparing for upload...', duration: 500, progress: 25 },
+    { message: `Beginning firmware upload: ${fileName}`, duration: 100, progress: 30 },
+    { message: 'Uploading chunk 1 of 4...', duration: 2000, progress: 50 },
+    { message: 'Uploading chunk 2 of 4...', duration: 2000, progress: 70 },
+    { message: 'Uploading chunk 3 of 4...', duration: 2000, progress: 90 },
+    { message: 'Uploading chunk 4 of 4...', duration: 1500, progress: 99 },
+    { message: 'Finalizing upload...', duration: 1000, progress: 100 },
+    { message: 'Verifying checksum...', duration: 1500, progress: 100, status: 'verifying' },
+    { message: 'Checksum valid. Device is rebooting.', duration: 2000, progress: 100, status: 'rebooting' },
+  ];
+
+  let accumulatedDelay = 0;
+  for (const step of steps) {
+    accumulatedDelay += step.duration;
+    setTimeout(() => {
+      onProgress({
+        message: step.message,
+        progress: step.progress,
+        status: 'uploading',
+      });
+    }, accumulatedDelay);
+  }
+
+  // Simulate success or failure
+  setTimeout(() => {
+    const isSuccess = Math.random() > 0.1; // 90% success rate
+    if (isSuccess) {
+      onProgress({
+        message: 'Update complete. Device is online.',
+        progress: 100,
+        status: 'success',
+      });
+    } else {
+      onProgress({
+        message: 'Error: Checksum mismatch. Please try again.',
+        progress: 100,
+        status: 'failed',
+      });
+    }
+  }, accumulatedDelay + 1000);
 }

@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from 'react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import Link from 'next/link';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import DeploymentPipeline from "@/components/deployment-pipeline";
 import StatusIndicator from "@/components/status-indicator";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
-import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History } from "lucide-react";
+import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket } from "lucide-react";
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   pipelineStatus: PipelineStatus;
@@ -93,6 +94,13 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href="/ota">
+                    <Rocket className="mr-2 h-4 w-4" />
+                    <span>Go to OTA Update Page</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => onManualAction('compile')} disabled={isActionInProgress}>
                   <Cog className="mr-2 h-4 w-4" /> Compile Firmware
                 </DropdownMenuItem>
@@ -101,9 +109,6 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onManualAction('verify')} disabled={isActionInProgress}>
                   <ShieldCheck className="mr-2 h-4 w-4" /> Verify on Device
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled>
-                  <Wifi className="mr-2 h-4 w-4" /> Send OTA Update
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

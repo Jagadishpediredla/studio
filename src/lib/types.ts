@@ -46,3 +46,9 @@ export interface CompilationJob {
   };
   error?: string | null;
 }
+
+export interface OtaProgress {
+    message: string;
+    progress: number;
+    status: 'uploading' | 'success' | 'failed';
+}
