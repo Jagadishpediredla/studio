@@ -24,14 +24,14 @@ export type HistoryItem = {
 
 export type CompilationJobStatus = 'created' | 'preparing' | 'compiling' | 'completed' | 'failed' | 'canceled' | 'submitted' | 'received';
 
-// Simple status update from Firebase, as per the new "SIMPLE API USAGE GUIDE"
+// SIMPLE API: Represents a log entry or a status update message.
 export interface StatusUpdate {
   timestamp: string; // ISO 8601 string
   message: string;
   type: 'info' | 'success' | 'error';
 }
 
-// Represents a job status object from Firebase
+// SIMPLE API: Represents the direct status object from Firebase
 export interface FirebaseStatusUpdate {
   status: CompilationJobStatus;
   message: string;
@@ -39,7 +39,7 @@ export interface FirebaseStatusUpdate {
   timestamp: number;
 }
     
-// Simplified CompilationJob for the frontend, based on the simple API
+// SIMPLE API: Simplified CompilationJob for the frontend
 export interface CompilationJob {
   id: string;
   status: CompilationJobStatus;
@@ -47,11 +47,6 @@ export interface CompilationJob {
   message: string;
   createdAt: string; // ISO 8601 string
   completedAt?: string; // ISO 8601 string
-  result?: {
-    binary: string;
-    filename: string;
-    size: number;
-  };
   error?: string | null;
 }
 

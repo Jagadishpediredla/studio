@@ -59,15 +59,12 @@ export async function startCompilation(payload: { code: string; board: BoardInfo
   
   try {
     const requestRef = ref(database, `requests/${desktopId}/${requestId}`);
+    // SIMPLE API: Payload should be simple.
     await set(requestRef, {
         code: code,
         board: board.fqbn,
         libraries: board.libraries || [],
-        timestamp: Date.now(),
-        clientInfo: {
-            id: CLIENT_ID,
-            userAgent: 'AIoT Studio Web App',
-        }
+        timestamp: Date.now()
     });
 
     return { success: true, jobId: requestId };
@@ -84,12 +81,12 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
         const data: FirebaseStatusUpdate = snapshot.val();
         
         if (!data) {
-            // If there's no data, it means the job hasn't been picked up by the desktop client yet.
-            // Return undefined for the job, so the UI can show a "waiting" message.
+            // SIMPLE API: If there's no data, it means the job hasn't been picked up.
+            // Return undefined so the UI can show a "waiting" message.
             return { success: true, job: undefined };
         }
         
-        // Adapt simple FirebaseStatusUpdate to the CompilationJob
+        // SIMPLE API: Adapt simple FirebaseStatusUpdate to the CompilationJob
         const job: CompilationJob = {
             id: jobId,
             status: data.status,
