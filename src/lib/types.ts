@@ -21,7 +21,7 @@ export type HistoryItem = {
   timestamp: Date;
 };
 
-export type CompilationJobStatus = 'created' | 'preparing' | 'installing' | 'compiling' | 'completed' | 'failed' | 'canceled';
+export type CompilationJobStatus = 'created' | 'preparing' | 'compiling' | 'completed' | 'failed' | 'canceled' | 'submitted';
 
 // Represents one log entry from the server's status updates
 export interface StatusUpdate {
@@ -51,4 +51,37 @@ export interface OtaProgress {
     message: string;
     progress: number;
     status: 'uploading' | 'success' | 'failed';
+}
+
+// Data structures from Firebase Bridge
+export interface FirebaseStatusUpdate {
+  status: CompilationJobStatus;
+  message: string;
+  progress?: number;
+  elapsed?: number;
+  timestamp: number;
+  history?: {
+    message: string;
+    timestamp: number;
+    type: 'info' | 'success' | 'error';
+  }[];
+  result?: {
+    filename: string;
+    size: number;
+  };
+}
+
+export interface FirebaseCompilationJob {
+    id: string;
+    status: CompilationJobStatus;
+    progress?: number;
+    statusUpdates: FirebaseStatusUpdate[];
+    createdAt: string;
+    completedAt?: string;
+    result?: {
+      binary: string;
+      filename: string;
+      size: number;
+    };
+    error?: string | null;
 }

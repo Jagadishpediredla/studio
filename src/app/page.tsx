@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
-import { checkServerHealth, startCompilation, getCompilationJobStatus } from '@/app/actions';
+import { checkServerHealth, startCompilation, getCompilationJobStatus, getBinary } from '@/app/actions';
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, CompilationJob, StatusUpdate } from '@/lib/types';
 
 import AppHeader from '@/components/app-header';
@@ -83,13 +83,14 @@ export default function Home() {
     return () => stopPolling();
   }, []);
   
-  const handleFirmwareDownload = (job: CompilationJob) => {
-    if (!job.result?.binary) {
-      toast({ title: 'Download Failed', description: 'No binary data found in compilation result.', variant: 'destructive' });
+  const handleFirmwareDownload = async (jobId: string, filename: string) => {
+    const result = await getBinary(jobId);
+    if (!result.success || !result.binary) {
+      toast({ title: 'Download Failed', description: result.error || 'No binary data found.', variant: 'destructive' });
       return;
     }
     
-    const byteCharacters = atob(job.result.binary);
+    const byteCharacters = atob(result.binary);
     const byteNumbers = new Array(byteCharacters.length);
     for (let i = 0; i < byteCharacters.length; i++) {
       byteNumbers[i] = byteCharacters.charCodeAt(i);
@@ -99,7 +100,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = job.result.filename || `firmware-${new Date().getTime()}.bin`;
+    a.download = filename || `firmware-${new Date().getTime()}.bin`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -109,21 +110,21 @@ export default function Home() {
   };
 
 
-  const runCompileStep = async (): Promise<string | null> => {
+  const runCompileStep = async (desktopId: string): Promise<string | null> => {
     updatePipeline('compile', 'processing');
-    setCurrentStatus('Starting compilation job...');
-    const payload = { code, board: boardInfo };
-    setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: 'Sending code to compilation server...', timestamp: new Date().toISOString() }]);
+    setCurrentStatus('Submitting job to desktop client via Firebase...');
+    const payload = { code, board: boardInfo, desktopId };
+    setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: 'Sending code to compilation service via Firebase Bridge...', timestamp: new Date().toISOString() }]);
     
     const result = await startCompilation(payload);
 
     if (result.success && result.jobId) {
-      const logMessage = `Compilation job started with ID: ${result.jobId}`;
+      const logMessage = `Compilation job submitted with ID: ${result.jobId}`;
       setCurrentStatus(logMessage);
       return result.jobId;
     } else {
       updatePipeline('compile', 'failed');
-      const errorMessage = result.error || 'Failed to start compilation job.';
+      const errorMessage = result.error || 'Failed to start compilation job via Firebase.';
       setCurrentStatus(`Error: ${errorMessage}`);
       setCompilationLogs(prev => [...prev, { jobId: '', type: 'error', message: `Error: ${errorMessage}`, timestamp: new Date().toISOString() }]);
       toast({ 
@@ -142,10 +143,11 @@ export default function Home() {
     pollingIntervalRef.current = setInterval(async () => {
       const result = await getCompilationJobStatus(jobId);
       
-      if (!result.success || !result.job) {
+      // If result is not successful, it means there was a Firebase connection error
+      if (!result.success) {
         stopPolling();
         updatePipeline('compile', 'failed');
-        const errorMsg = result.error || 'Failed to get job status.';
+        const errorMsg = result.error || 'Failed to get job status from Firebase.';
         setCurrentStatus(`Error: ${errorMsg}`);
         setCompilationLogs(prev => [...prev, { jobId: '', type: 'error', message: `Error: ${errorMsg}`, timestamp: new Date().toISOString() }]);
         toast({ title: 'Polling Error', description: errorMsg, variant: 'destructive' });
@@ -153,8 +155,14 @@ export default function Home() {
         return;
       }
       
-      const job: CompilationJob = result.job;
+      const job: CompilationJob | undefined = result.job;
 
+      // If job is undefined, it means we are waiting for the desktop client to pick it up.
+      if (!job) {
+        setCurrentStatus(`Job ${jobId}: Waiting for desktop client to pick up the request...`);
+        return;
+      }
+      
       setCompilationLogs(job.statusUpdates || []);
       const latestLog = job.statusUpdates && job.statusUpdates.length > 0
         ? job.statusUpdates[job.statusUpdates.length - 1]
@@ -165,7 +173,12 @@ export default function Home() {
         stopPolling();
         updatePipeline('compile', 'completed');
         setCurrentStatus('Compilation successful. Firmware is ready.');
-        handleFirmwareDownload(job);
+        
+        if (job.result) {
+            handleFirmwareDownload(job.id, job.result.filename);
+        } else {
+            toast({ title: 'Error', description: 'Compilation completed but no result found.', variant: 'destructive' });
+        }
         
         // Continue with the rest of the pipeline
         (async () => {
@@ -192,9 +205,9 @@ export default function Home() {
         toast({ title: 'Compilation Failed', description: errorDescription, variant: 'destructive', duration: 20000 });
         setIsGenerating(false);
       }
-      // If status is 'processing' or 'queued', the interval will simply continue to the next poll.
+      // If status is other states, the interval will simply continue to the next poll.
 
-    }, 2500); // Poll every 2.5 seconds
+    }, 3000); // Poll every 3 seconds
   };
   
   const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile'>): Promise<boolean> => {
@@ -222,27 +235,29 @@ export default function Home() {
       return;
     }
     setIsGenerating(true);
-    setPipelineStatus({ codeGen: 'processing', compile: 'pending', upload: 'pending', verify: 'pending' });
-    setCurrentStatus('Generating code with AI...');
+    setPipelineStatus({ codeGen: 'pending', compile: 'pending', upload: 'pending', verify: 'pending' });
+    setCurrentStatus('Starting process...');
     setCompilationLogs([]);
 
     // --- Pre-flight Health Check ---
-    setCurrentStatus('Checking compilation server connection...');
+    setCurrentStatus('Checking for available desktop clients via Firebase...');
     const health = await checkServerHealth();
 
-    if (!health.success) {
-      const errorMessage = health.error || 'Compilation server is unreachable.';
+    if (!health.success || !health.desktopId) {
+      const errorMessage = health.error || 'No online desktop clients found.';
       setCurrentStatus(errorMessage);
       setCompilationLogs(prev => [...prev, { jobId: '', type: 'error', message: `Error: ${errorMessage}`, timestamp: new Date().toISOString() }]);
-      toast({ title: 'Server Not Ready', description: errorMessage, variant: 'destructive', duration: 20000 });
+      toast({ title: 'No Clients Ready', description: errorMessage, variant: 'destructive', duration: 20000 });
       setIsGenerating(false);
       setPipelineStatus({ codeGen: 'pending', compile: 'failed', upload: 'pending', verify: 'pending' });
       return;
     }
-    setCurrentStatus('Server connection established.');
-    setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: 'Server is healthy.', timestamp: new Date().toISOString() }]);
+    setCurrentStatus(`Found online client: ${health.desktopId}. Starting code generation.`);
+    setCompilationLogs(prev => [...prev, { jobId: '', type: 'info', message: `Desktop client ${health.desktopId} is online.`, timestamp: new Date().toISOString() }]);
     // --- End Health Check ---
 
+    updatePipeline('codeGen', 'processing');
+    setCurrentStatus('Generating code with AI...');
 
     const currentHistoryItem: HistoryItem = { id: crypto.randomUUID(), code, board: boardInfo, visualizerHtml: visualizerHtml, timestamp: new Date(), prompt };
     setHistory(prev => [currentHistoryItem, ...prev]);
@@ -264,7 +279,7 @@ export default function Home() {
       toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
 
       // Start automated pipeline
-      const jobId = await runCompileStep();
+      const jobId = await runCompileStep(health.desktopId);
       await visPromise; // Wait for visualizer to finish
 
       if (jobId) {
@@ -290,7 +305,13 @@ export default function Home() {
   const handleManualAction = async (step: keyof Omit<PipelineStatus, 'codeGen'>) => {
     setIsGenerating(true);
     if (step === 'compile') {
-      const jobId = await runCompileStep();
+      const health = await checkServerHealth();
+      if (!health.success || !health.desktopId) {
+         toast({ title: 'No Clients Ready', description: health.error || 'No online desktop clients found.', variant: 'destructive' });
+         setIsGenerating(false);
+         return;
+      }
+      const jobId = await runCompileStep(health.desktopId);
       if (jobId) {
         pollCompilationStatus(jobId);
       } else {
@@ -367,5 +388,3 @@ export default function Home() {
     </div>
   );
 }
-
-    

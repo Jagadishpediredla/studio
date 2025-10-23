@@ -1,124 +1,127 @@
 'use server';
 
-import type { BoardInfo, CompilationJob, OtaProgress } from '@/lib/types';
+import type { BoardInfo, CompilationJob, OtaProgress, FirebaseCompilationJob, FirebaseStatusUpdate } from '@/lib/types';
+import { database } from '@/lib/firebase';
+import { ref, get, set, child } from 'firebase/database';
 
-interface CompilePayload {
-  code: string;
-  board: BoardInfo;
-}
 
-const API_URL = process.env.COMPILATION_API_URL || 'http://localhost:3002';
-const API_KEY = process.env.COMPILATION_API_KEY;
 // A simple, session-specific client ID.
 // In a real multi-user app, this would be a stable user or session ID.
 const CLIENT_ID = 'aiot-studio-session'; 
 
-
-const getAuthHeaders = () => {
-    if (!API_KEY) {
-        throw new Error('Compilation API key is not configured.');
-    }
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-        'X-Client-ID': CLIENT_ID,
-    };
-};
+const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export async function checkServerHealth() {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
-
   try {
-    const response = await fetch(`${API_URL}/health`, {
-      method: 'GET',
-      cache: 'no-store',
-      signal: controller.signal, // Pass the abort signal to fetch
-    });
-    
-    clearTimeout(timeoutId);
+    const desktopsRef = ref(database, 'desktops');
+    const snapshot = await get(desktopsRef);
+    const desktops = snapshot.val();
 
-    if (response.ok) {
-        return { success: true };
+    if (!desktops) {
+      return { success: false, error: 'No desktop clients are online. Please ensure the desktop bridge is running.' };
     }
-    return { success: false, error: `Server health check failed with status: ${response.status}` };
+
+    const onlineDesktops = Object.entries(desktops).filter(([_, info]: [string, any]) => {
+      if (info.status !== 'online') return false;
+      const lastSeen = new Date(info.lastSeen).getTime();
+      // Desktop is online if seen in the last 2 minutes
+      return (Date.now() - lastSeen) < 120000; 
+    });
+
+    if (onlineDesktops.length === 0) {
+      return { success: false, error: 'No active desktop clients found. Please check the bridge connection.' };
+    }
+    
+    // Return the ID of the first available desktop client
+    return { success: true, desktopId: onlineDesktops[0][0] };
+
   } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      return { success: false, error: 'Health check timed out. The server might be slow or unreachable.' };
-    }
-    
-    let errorMessage = `Failed to connect to the compilation server. Is it running?`;
-    if (error.cause?.code === 'ECONNREFUSED') {
-         errorMessage = `Connection refused at ${API_URL}. Please ensure the compilation server is running.`;
-    }
+    let errorMessage = `Failed to connect to Firebase. Check your connection and configuration.`;
     return { success: false, error: errorMessage };
   }
 }
 
-export async function startCompilation(payload: CompilePayload) {
+export async function startCompilation(payload: { code: string; board: BoardInfo; desktopId: string }) {
+  const { code, board, desktopId } = payload;
+  const requestId = generateRequestId();
+  
   try {
-    const headers = getAuthHeaders();
-    console.log("Sending compilation request with payload:", JSON.stringify(payload, null, 2));
-
-    const response = await fetch(`${API_URL}/compile/async`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        code: payload.code,
-        board: payload.board.fqbn,
-        libraries: payload.board.libraries,
-      }),
+    const requestRef = ref(database, `requests/${desktopId}/${requestId}`);
+    await set(requestRef, {
+        code: code,
+        board: board.fqbn,
+        libraries: board.libraries || [],
+        timestamp: Date.now(),
+        clientInfo: {
+            id: CLIENT_ID,
+            url: 'AIoT Studio Web App',
+            timestamp: new Date().toISOString()
+        }
     });
 
-    if (response.ok) {
-        const data = await response.json();
-        return { success: true, jobId: data.jobId };
-    }
-    
-    let errorText = `Server responded with status: ${response.status}`;
-    try {
-        const errorData = await response.json();
-        errorText = errorData.error || errorText;
-    } catch (e) {
-        try {
-          errorText = await response.text();
-        } catch (e) {
-            // ignore
-        }
-    }
-    return { success: false, error: `Failed to start compilation: ${errorText}` };
+    return { success: true, jobId: requestId };
 
-  } catch (error: any)
-  {
-    let errorMessage = `Failed to connect to the compilation server. Is it running?`;
-    if (error.cause?.code === 'ECONNREFUSED') {
-         errorMessage = `Connection refused at ${API_URL}. Please ensure the compilation server is running.`;
-    } else if (error.message?.includes('API key')) {
-        errorMessage = error.message;
-    }
-    return { success: false, error: errorMessage };
+  } catch (error: any) {
+    return { success: false, error: `Failed to submit compilation request to Firebase: ${error.message}` };
   }
 }
 
-export async function getCompilationJobStatus(jobId: string) {
+export async function getCompilationJobStatus(jobId: string): Promise<{ success: boolean; job?: CompilationJob; error?: string }> {
     try {
-        const headers = getAuthHeaders();
-        const response = await fetch(`${API_URL}/compile/status/${jobId}`, { headers, cache: 'no-store' });
-        const data = await response.json();
+        const statusRef = ref(database, `status/${jobId}`);
+        const snapshot = await get(statusRef);
+        const data: FirebaseStatusUpdate = snapshot.val();
         
-        if (response.ok && data.success) {
-            // The new API nests the job object.
-            return { success: true, job: data.job };
+        if (!data) {
+            return { success: true, job: undefined }; // Job not started yet
         }
-        return { success: false, error: data.error || 'Could not fetch job status.' };
+        
+        // Adapt FirebaseStatusUpdate to CompilationJob
+        const job: CompilationJob = {
+            id: jobId,
+            status: data.status,
+            progress: data.progress,
+            statusUpdates: data.history ? data.history.map(h => ({
+                jobId: jobId,
+                message: h.message,
+                timestamp: new Date(h.timestamp).toISOString(),
+                type: h.type,
+            })) : [{
+                jobId,
+                message: data.message,
+                timestamp: new Date(data.timestamp).toISOString(),
+                type: data.status === 'failed' ? 'error' : 'info'
+            }],
+            createdAt: new Date(data.timestamp).toISOString(), // Approximate
+            error: data.status === 'failed' ? data.message : undefined,
+            result: data.status === 'completed' ? {
+                binary: '', // This will be fetched separately
+                filename: data.result?.filename || 'firmware.bin',
+                size: data.result?.size || 0,
+            } : undefined,
+            completedAt: data.status === 'completed' ? new Date(data.timestamp).toISOString() : undefined,
+        };
+
+        return { success: true, job };
 
     } catch (error: any) {
-        let errorMessage = 'Server not available while fetching job status.';
-        if (error.message.includes('API key')) {
-            errorMessage = error.message;
+        return { success: false, error: `Error fetching job status from Firebase: ${error.message}` };
+    }
+}
+
+export async function getBinary(jobId: string) {
+    try {
+        const binaryRef = ref(database, `binaries/${jobId}`);
+        const snapshot = await get(binaryRef);
+        const data = snapshot.val();
+        
+        if (!data || !data.binary) {
+            return { success: false, error: 'Binary not found in database.'};
         }
-        return { success: false, error: errorMessage };
+        
+        return { success: true, binary: data.binary, filename: data.filename };
+    } catch (error: any) {
+        return { success: false, error: `Error fetching binary from Firebase: ${error.message}`};
     }
 }
 
