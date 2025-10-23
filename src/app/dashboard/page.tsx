@@ -16,7 +16,7 @@ export default function DashboardPage() {
         </Button>
       </header>
       <main className="flex-grow overflow-y-auto">
-        {/* For this example, we assume a static userId. In a real app, this would be dynamic. */}
+        {/* As per docs, use a consistent user ID */}
         <JobDashboard userId="user_123" />
       </main>
     </div>

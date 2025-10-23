@@ -1,4 +1,5 @@
 
+
 export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
 
 export type PipelineStatus = {
@@ -30,21 +31,20 @@ export interface StatusUpdate {
   type: 'info' | 'success' | 'error';
 }
 
-// Represents the direct status object from Firebase (legacy)
+// Represents the direct status object from Firebase
 export interface FirebaseStatusUpdate {
-  status: 'acknowledged' | 'preparing' | 'compiling' | 'uploading' | 'completed' | 'failed';
+  status: 'acknowledged' | 'preparing' | 'installing_libraries' | 'compiling' | 'uploading' | 'completed' | 'failed';
   message: string;
-  progress?: number;
+  progress: number;
   timestamp: number;
-}
-    
-// Simplified CompilationJob for the frontend (legacy)
-export interface CompilationJob {
-  id: string;
-  status: 'acknowledged' | 'preparing' | 'compiling' | 'uploading' | 'completed' | 'failed';
-  progress?: number;
-  message: string;
-  timestamp: string; // ISO 8601 string
+  serverTimestamp: number;
+  phase: string;
+  elapsedTime: number;
+  iteration: number;
+  logId: string;
+  buildId: string;
+  clientId: string;
+  errorDetails?: object;
 }
 
 export interface BuildInfo {
@@ -66,123 +66,69 @@ export interface OtaProgress {
 }
 
 
-// New Enhanced Types from Final Documentation
+// Types based on the final system documentation
 
 export interface JobStatistics {
   totalJobs: number;
   completedJobs: number;
   failedJobs: number;
-  averageDuration: number;
+  averageDuration: number; // in milliseconds
 }
 
 export interface JobSummary {
-  jobId: string;
+  jobId: string; // logId from the log object
   status: string;
-  progress: number;
-  createdAt: string;
-  duration?: number;
-  board?: string;
-  codeLength?: number;
-  sender?: { userId?: string; source?: string };
-  buildId?: string;
+  createdAt: string; // ISO string
+  board?: string; // from build metadata, may not be in log root
+  requestId: string;
+  buildId: string;
+  duration?: number; // Calculated from client-side metrics if available
 }
 
+
+// This represents a single unified log entry from /logs/{logId}
 export interface JobDetails {
-  success: boolean;
-  jobId: string;
-  status: string;
-  progress: number;
-  createdAt: string;
-  lastUpdated: string;
-  code?: {
-    length: number;
-    lines: number;
-    hash: string;
-    includes: string[];
-    functions: string[];
-  };
-  hardware?: {
-    board: string;
-    libraries: string[];
-    requiredCores: string;
-  };
-  sender?: {
-    source: string;
-    userId: string;
-    sessionId: string;
-    userAgent: string;
-    ip: string;
-    platform: string;
-  };
-  cloudSync?: {
-    firebaseConnected: boolean;
-    lastSyncTime: string;
-    syncAttempts: number;
-    syncErrors: any[];
-    realTimeUpdates: boolean;
-  };
-  build?: {
+    logId: string;
+    requestId: string;
     buildId: string;
-    startTime: string;
-    endTime: string;
-    duration: number;
-    success: boolean;
-    binaryFiles: {
-      filename: string;
-      type: string;
-      size: number;
-      generatedAt: string;
-    }[];
-    compilerOutput: {
-      timestamp: string;
-      output: string;
-      type: string;
-    }[];
-    errors: any[];
-    warnings: any[];
-  };
-  system?: {
-    hostname: string;
-    platform: string;
-    nodeVersion: string;
-    memoryUsage: object;
-    cpuUsage: object;
-  };
-  performance?: {
-    phases: {
-      [key: string]: {
-        duration: number;
-        startTime: string;
-        endTime: string;
-      };
-    };
-    bottlenecks: any[];
-  };
-  timeline?: {
-    timestamp: string;
+    createdAt: number;
+    updatedAt: number;
     status: string;
-    message: string;
-    progress: number;
     phase: string;
-    cloudSync: {
-      attempted: boolean;
-      success: boolean;
-      latency: number;
+    serverSide: {
+        clientId: string;
+        hostname: string;
+        events: LogEvent[];
+        metrics: Record<string, any>;
     };
-  }[];
-  isRunning?: boolean;
-  isCompleted?: boolean;
-  isFailed?: boolean;
-  downloads?: {
-    [key: string]: string;
-  };
-  error?: string;
+    clientSide: {
+        userId?: string;
+        source?: string;
+        events: LogEvent[];
+        metrics: Record<string, any>;
+    };
+    timeline: TimelineEvent[];
 }
 
-export interface JobLogData {
-    metadata: any;
-    timeline: any[];
-    compilation: any;
-    performance: any;
-    system: any;
+export interface LogEvent {
+    timestamp: number;
+    event: string;
+    message: string;
+    data?: Record<string, any>;
+}
+
+export interface TimelineEvent {
+    timestamp: number;
+    source: 'client' | 'server';
+    event: string;
+    message: string;
+}
+
+// Minimal type for CompilationJob, kept for compatibility if needed elsewhere
+export interface CompilationJob {
+  id: string;
+  status: 'acknowledged' | 'preparing' | 'compiling' | 'uploading' | 'completed' | 'failed';
+  progress?: number;
+  message: string;
+  timestamp: string; // ISO 8601 string
 }

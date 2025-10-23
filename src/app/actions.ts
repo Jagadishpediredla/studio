@@ -1,11 +1,11 @@
 
 'use server';
 
-import type { BoardInfo, CompilationJob, OtaProgress, FirebaseStatusUpdate, BuildInfo, JobSummary, JobStatistics, JobDetails, LogEvent } from '@/lib/types';
+import type { BoardInfo, BuildInfo, JobSummary, JobStatistics, JobDetails, LogEvent, TimelineEvent } from '@/lib/types';
 import { database, serverTimestamp } from '@/lib/firebase';
 import { ref, get, set, child, remove, query, orderByChild, equalTo, limitToLast, push } from 'firebase/database';
 
-const CLIENT_USER_ID = 'aiot-studio-user'; 
+const CLIENT_USER_ID = 'user_123'; 
 
 const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -14,7 +14,7 @@ export async function findActiveDesktopClient(): Promise<{ success: boolean, cli
   
   try {
     // A quick write & remove to verify DB permissions and connection.
-    await set(healthCheckRef, { timestamp: Date.now(), client: 'cloud-client' });
+    await set(healthCheckRef, { timestamp: serverTimestamp(), client: 'cloud-client' });
     await remove(healthCheckRef);
 
     const desktopsRef = ref(database, 'desktops');
@@ -27,7 +27,7 @@ export async function findActiveDesktopClient(): Promise<{ success: boolean, cli
 
     const activeClients = Object.entries(desktops).filter(([_, info]: [string, any]) => {
       if (info.status !== 'online') return false;
-      const lastSeen = new Date(info.lastSeen).getTime();
+      const lastSeen = info.lastSeen; // lastSeen is a server timestamp
       return (Date.now() - lastSeen) < 30000; // 30 seconds as per docs
     });
 
@@ -109,104 +109,6 @@ export async function writeClientLog(logId: string, event: string, message: stri
     }
 }
 
-export async function performOtaUpdate(
-  firmwareFile: string,
-  deviceId: string,
-  onProgress: (update: OtaProgress) => void
-) {
-  // This is a simulated OTA update process for demonstration purposes.
-  const steps = [
-    { progress: 10, message: `Connecting to device ${deviceId}...` },
-    { progress: 25, message: 'Device connected. Authenticating...' },
-    { progress: 40, message: 'Authenticated. Preparing to send firmware...' },
-    { progress: 60, message: `Sending ${firmwareFile}... (Chunk 1/2)` },
-    { progress: 85, message: `Sending ${firmwareFile}... (Chunk 2/2)` },
-    { progress: 95, message: 'Firmware sent. Verifying checksum...' },
-    { progress: 100, message: 'Verification complete. Rebooting device.' },
-  ];
-
-  for (const step of steps) {
-    onProgress({ ...step, status: 'uploading' });
-    await new Promise(resolve => setTimeout(resolve, 750));
-  }
-
-  onProgress({ progress: 100, message: 'Update successful!', status: 'success' });
-}
-
-
-// Actions for the Job Dashboard
-export async function getJobs(
-  limit: number = 50, 
-  status?: string, 
-  userId?: string
-): Promise<{ success: boolean; jobs?: JobSummary[], statistics?: JobStatistics, error?: string }> {
-    try {
-        const logsRef = ref(database, 'logs');
-        const jobsQuery = query(logsRef, orderByChild('createdAt'), limitToLast(limit));
-        
-        const snapshot = await get(jobsQuery);
-        const allLogsData = snapshot.val() || {};
-        
-        let allJobs: any[] = Object.values(allLogsData);
-
-        // Filter locally
-        if (status) {
-            allJobs = allJobs.filter(job => job.status === status);
-        }
-        if (userId) {
-            // This assumes the clientSide object and userId exist.
-            allJobs = allJobs.filter(job => job.clientSide?.userId === userId);
-        }
-
-        const jobSummaries: JobSummary[] = allJobs.map(log => ({
-            jobId: log.logId, // In the new model, logId is the primary job identifier
-            status: log.status,
-            progress: log.progress || 0, // Fallback for progress
-            createdAt: new Date(log.createdAt).toISOString(),
-            duration: log.metrics?.totalTime,
-            board: log.board,
-            codeLength: log.clientSide?.events?.[0]?.data?.codeLength,
-            sender: { userId: log.clientSide?.userId, source: log.clientSide?.source },
-            buildId: log.buildId,
-        })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); // Most recent first
-
-        const completedJobs = allJobs.filter(j => j.status === 'completed');
-        const totalDuration = completedJobs.reduce((sum, job) => sum + (job.metrics?.totalTime || 0), 0);
-
-        const statistics: JobStatistics = {
-            totalJobs: allJobs.length,
-            completedJobs: completedJobs.length,
-            failedJobs: allJobs.filter(j => j.status === 'failed').length,
-            averageDuration: completedJobs.length > 0 ? totalDuration / completedJobs.length : 0,
-        };
-
-        return { success: true, jobs: jobSummaries, statistics };
-
-    } catch (error: any) {
-        console.error("Failed to fetch jobs from /logs:", error);
-        return { success: false, error: error.message };
-    }
-}
-
-export async function getJobDetails(jobId: string): Promise<any> { // Using `any` for now to match flexible log structure
-    try {
-        const jobRef = ref(database, `logs/${jobId}`);
-        const snapshot = await get(jobRef);
-        const jobData = snapshot.val();
-
-        if (!jobData) {
-            return { success: false, error: `Job log with ID ${jobId} not found.` };
-        }
-        
-        // This data is returned directly, the component will parse the nested structure
-        return { success: true, ...jobData };
-
-    } catch (error: any) {
-        console.error(`Failed to fetch details for job log ${jobId}:`, error);
-        return { success: false, error: error.message };
-    }
-}
-
 export async function getBuildInfo(buildId: string): Promise<{ success: boolean; build?: BuildInfo; error?: string }> {
     try {
         const buildRef = ref(database, `builds/${buildId}`);
@@ -238,4 +140,100 @@ export async function getBinary(buildId: string, fileType: 'hex' | 'bin' | 'elf'
     }
 }
 
-    
+export async function performOtaUpdate(
+  firmwareFile: string,
+  deviceId: string,
+  onProgress: (update: { progress: number; message: string; status: string }) => void
+) {
+  // This is a simulated OTA update process for demonstration purposes.
+  const steps = [
+    { progress: 10, message: `Connecting to device ${deviceId}...` },
+    { progress: 25, message: 'Device connected. Authenticating...' },
+    { progress: 40, message: 'Authenticated. Preparing to send firmware...' },
+    { progress: 60, message: `Sending ${firmwareFile}... (Chunk 1/2)` },
+    { progress: 85, message: `Sending ${firmwareFile}... (Chunk 2/2)` },
+    { progress: 95, message: 'Firmware sent. Verifying checksum...' },
+    { progress: 100, message: 'Verification complete. Rebooting device.' },
+  ];
+
+  for (const step of steps) {
+    onProgress({ ...step, status: 'uploading' });
+    await new Promise(resolve => setTimeout(resolve, 750));
+  }
+
+  onProgress({ progress: 100, message: 'Update successful!', status: 'success' });
+}
+
+
+// Actions for the Job Dashboard (rewritten for new schema)
+export async function getJobs(
+  limit: number = 50, 
+  statusFilter?: string, 
+  userIdFilter?: string
+): Promise<{ success: boolean; jobs?: JobSummary[], statistics?: JobStatistics, error?: string }> {
+    try {
+        const logsRef = ref(database, 'logs');
+        const jobsQuery = query(logsRef, orderByChild('createdAt'), limitToLast(limit));
+        
+        const snapshot = await get(jobsQuery);
+        const allLogsData = snapshot.val() || {};
+        
+        let allJobs: JobDetails[] = Object.values(allLogsData);
+
+        // Filter locally
+        if (statusFilter) {
+            allJobs = allJobs.filter(job => job.status === statusFilter);
+        }
+        if (userIdFilter) {
+            allJobs = allJobs.filter(job => job.clientSide?.userId === userIdFilter);
+        }
+
+        const jobSummaries: JobSummary[] = allJobs.map((log: JobDetails) => ({
+            jobId: log.logId,
+            status: log.status,
+            createdAt: new Date(log.createdAt).toISOString(),
+            requestId: log.requestId,
+            buildId: log.buildId,
+            // Duration can be complex. Let's take client-side total time if available.
+            duration: log.clientSide?.metrics?.totalWaitTime,
+        }));
+
+        // Sort descending by creation date
+        jobSummaries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        const completedJobs = allJobs.filter(j => j.status === 'completed');
+        const totalDuration = completedJobs.reduce((sum, job) => sum + (job.clientSide?.metrics?.totalWaitTime || 0), 0);
+
+        const statistics: JobStatistics = {
+            totalJobs: allJobs.length,
+            completedJobs: completedJobs.length,
+            failedJobs: allJobs.filter(j => j.status === 'failed').length,
+            averageDuration: completedJobs.length > 0 ? totalDuration / completedJobs.length : 0,
+        };
+
+        return { success: true, jobs: jobSummaries, statistics };
+
+    } catch (error: any) {
+        console.error("Failed to fetch jobs from /logs:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function getJobDetails(jobId: string): Promise<{ success: boolean; job?: JobDetails; error?: string }> {
+    try {
+        const jobRef = ref(database, `logs/${jobId}`);
+        const snapshot = await get(jobRef);
+        const jobData = snapshot.val();
+
+        if (!jobData) {
+            return { success: false, error: `Job log with ID ${jobId} not found.` };
+        }
+        
+        // The data from firebase is the JobDetails object
+        return { success: true, job: jobData as JobDetails };
+
+    } catch (error: any) {
+        console.error(`Failed to fetch details for job log ${jobId}:`, error);
+        return { success: false, error: error.message };
+    }
+}
