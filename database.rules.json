@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "desktops": {
+      ".read": true,
+      ".write": true
+    },
+    "requests": {
+      ".read": true,
+      ".write": true
+    },
+    "status": {
+      ".read": true,
+      ".write": true
+    },
+    "binaries": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
