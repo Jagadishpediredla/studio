@@ -1,3 +1,4 @@
+
 export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
 
 export type PipelineStatus = {
@@ -85,3 +86,5 @@ export interface FirebaseCompilationJob {
     };
     error?: string | null;
 }
+
+    

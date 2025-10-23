@@ -98,11 +98,13 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
                 message: h.message,
                 timestamp: new Date(h.timestamp).toISOString(),
                 type: h.type,
+                details: {} // Ensure details field exists
             })) : [{
                 jobId,
                 message: data.message,
                 timestamp: new Date(data.timestamp).toISOString(),
-                type: data.status === 'failed' ? 'error' : 'info'
+                type: data.status === 'failed' ? 'error' : 'info',
+                details: {} // Ensure details field exists
             }],
             createdAt: new Date(data.timestamp).toISOString(), // Approximate
             error: data.status === 'failed' ? data.message : undefined,
@@ -187,3 +189,5 @@ export async function performOtaUpdate(
     }
   }, accumulatedDelay + 1000);
 }
+
+    
