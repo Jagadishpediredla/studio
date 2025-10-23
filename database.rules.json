@@ -13,6 +13,15 @@
       ".read": true,
       ".write": true
     },
+    "logs": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": "createdAt"
+    },
+    "builds": {
+      ".read": true,
+      ".write": true
+    },
     "binaries": {
       ".read": true,
       ".write": true
