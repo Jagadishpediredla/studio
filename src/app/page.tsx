@@ -78,7 +78,7 @@ export default function Home() {
     buildId: '',
     lastStatus: '',
   });
-  const statusListenerRef = useRef<() => void>();
+  const statusListenerUnsubscribeRef = useRef<() => void>();
   const timeoutRef = useRef<NodeJS.Timeout>();
 
 
@@ -104,9 +104,9 @@ export default function Home() {
 
 
   const cleanupListeners = () => {
-    if (statusListenerRef.current) {
-        statusListenerRef.current();
-        statusListenerRef.current = undefined;
+    if (statusListenerUnsubscribeRef.current) {
+        statusListenerUnsubscribeRef.current();
+        statusListenerUnsubscribeRef.current = undefined;
     }
     if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -122,7 +122,31 @@ export default function Home() {
   const handleFirmwareDownload = async (buildId: string) => {
     addLog(`[CLOUD] Build complete. Requesting binary for build ${buildId}...`);
     
-    const result = await getBinary(buildId, 'hex'); // Default to .hex as per documentation
+    // According to the docs, we should first get build info to know which files are available.
+    const buildInfoResult = await getBuildInfo(buildId);
+
+    if (!buildInfoResult.success || !buildInfoResult.build) {
+      const errorMsg = `Download Failed: ${buildInfoResult.error || 'Could not retrieve build metadata.'}`;
+      addLog(`[CLOUD] ${errorMsg}`, 'error');
+      toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
+      return;
+    }
+
+    // Determine which file to download. Let's prefer .hex, then .bin.
+    const availableFiles = buildInfoResult.build.files;
+    let fileType: 'hex' | 'bin' | 'elf' | undefined;
+    if (availableFiles.hex) fileType = 'hex';
+    else if (availableFiles.bin) fileType = 'bin';
+    else if (availableFiles.elf) fileType = 'elf';
+    
+    if (!fileType) {
+        const errorMsg = `Download Failed: No downloadable files (.hex, .bin, .elf) found in build metadata.`;
+        addLog(`[CLOUD] ${errorMsg}`, 'error');
+        toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
+        return;
+    }
+
+    const result = await getBinary(buildId, fileType);
     if (!result.success || !result.binary) {
       const errorMsg = `Download Failed: ${result.error || 'No binary data found.'}`;
       addLog(`[CLOUD] ${errorMsg}`, 'error');
@@ -140,7 +164,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = result.filename || `firmware-${new Date().getTime()}.hex`;
+    a.download = result.filename || `firmware-${new Date().getTime()}.${fileType}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -258,8 +282,7 @@ export default function Home() {
     };
     
     // Attach listener and store the cleanup function
-    statusListenerRef.current = () => off(statusRef, 'value', onStatusUpdate);
-    onValue(statusRef, onStatusUpdate, (error) => {
+    const unsubscribe = onValue(statusRef, onStatusUpdate, (error) => {
         cleanupListeners();
         updatePipeline('compile', 'failed');
         const errorMsg = `Firebase listener error: ${error.message}`;
@@ -267,6 +290,11 @@ export default function Home() {
         toast({ title: 'Real-time Error', description: errorMsg, variant: 'destructive' });
         setIsGenerating(false);
     });
+
+    statusListenerUnsubscribeRef.current = () => {
+        off(statusRef, 'value'); // A more robust way to remove the listener
+        unsubscribe();
+    };
 
     // Set a 3-minute timeout for the entire job
     timeoutRef.current = setTimeout(() => {
@@ -276,7 +304,7 @@ export default function Home() {
             const errorMsg = 'Job timed out after 3 minutes. The desktop client did not respond or complete in time.';
             addLog(`[CLOUD] Error: ${errorMsg}`, 'error');
             if (jobStateRef.current.logId) {
-                writeClientLog(jobState_ref.current.logId, 'timeout', 'Job timed out after 3 minutes');
+                writeClientLog(jobStateRef.current.logId, 'timeout', 'Job timed out after 3 minutes');
             }
             toast({ title: 'Job Timeout', description: errorMsg, variant: 'destructive' });
             setIsGenerating(false);
@@ -481,3 +509,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

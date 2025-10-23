@@ -100,7 +100,7 @@ export async function writeClientLog(logId: string, event: string, message: stri
 
         // Update main log timestamp
         const updatedAtRef = child(logRef, 'updatedAt');
-        await set(updatedAtRef, serverTimestamp());
+        await set(updatedAtRef, timestamp);
         
         return { success: true };
     } catch (error: any) {
@@ -214,7 +214,7 @@ export async function getBuildInfo(buildId: string): Promise<{ success: boolean;
         const buildData = snapshot.val();
 
         if (!buildData) {
-            return { success: false, error: `Build ${buildId} not found.` };
+            return { success: false, error: `Build metadata not found in Firebase for buildId: ${buildId}` };
         }
         return { success: true, build: buildData as BuildInfo };
     } catch (error: any) {
@@ -229,7 +229,7 @@ export async function getBinary(buildId: string, fileType: 'hex' | 'bin' | 'elf'
         const data = snapshot.val();
         
         if (!data || !data.binary) {
-            return { success: false, error: `Binary for file type '${fileType}' not found in database.`};
+            return { success: false, error: `Binary for file type '${fileType}' not found in database for buildId: ${buildId}.`};
         }
         
         return { success: true, binary: data.binary, filename: data.filename, size: data.size };
@@ -237,3 +237,5 @@ export async function getBinary(buildId: string, fileType: 'hex' | 'bin' | 'elf'
         return { success: false, error: `Error fetching binary from Firebase: ${error.message}`};
     }
 }
+
+    
