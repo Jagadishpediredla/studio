@@ -84,7 +84,9 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
         const data: FirebaseStatusUpdate = snapshot.val();
         
         if (!data) {
-            return { success: true, job: undefined }; // Job not started or acknowledged yet
+            // If there's no data, it means the job hasn't been picked up by the desktop client yet.
+            // Return undefined for the job, so the UI can show a "waiting" message.
+            return { success: true, job: undefined };
         }
         
         // Adapt simple FirebaseStatusUpdate to the CompilationJob
@@ -96,11 +98,6 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
             createdAt: new Date(data.timestamp).toISOString(),
             completedAt: data.status === 'completed' ? new Date(data.timestamp).toISOString() : undefined,
             error: data.status === 'failed' ? data.message : undefined,
-            result: data.status === 'completed' ? {
-                binary: '', 
-                filename: 'firmware.bin', // Default filename, actual will come from binaries path
-                size: 0,
-            } : undefined,
         };
 
         return { success: true, job };

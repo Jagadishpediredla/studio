@@ -159,10 +159,12 @@ export default function Home() {
       const job: CompilationJob | undefined = result.job;
 
       if (!job) {
+        // This is the key change: handle the "waiting" state explicitly.
         setCurrentStatus(`Job ${jobId}: Waiting for desktop client to pick up the request...`);
         return;
       }
       
+      // We have a status, so the desktop client is responding.
       const newLog: StatusUpdate = { message: job.message, timestamp: job.createdAt, type: job.status === 'failed' ? 'error' : 'info' };
       setCompilationLogs(prev => {
         // Avoid adding duplicate logs
@@ -176,13 +178,7 @@ export default function Home() {
         updatePipeline('compile', 'completed');
         setCurrentStatus('Compilation successful. Firmware is ready.');
         
-        // Use getBinary to fetch filename and size
-        const binaryInfo = await getBinary(job.id);
-        if (binaryInfo.success) {
-            handleFirmwareDownload(job.id);
-        } else {
-            toast({ title: 'Error', description: 'Compilation completed but no result found.', variant: 'destructive' });
-        }
+        handleFirmwareDownload(job.id);
         
         (async () => {
           const uploadSuccess = await runPlaceholderStep('upload');
