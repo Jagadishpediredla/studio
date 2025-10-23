@@ -1,7 +1,7 @@
 
 'use server';
 
-import type { BoardInfo, CompilationJob, OtaProgress, FirebaseCompilationJob, FirebaseStatusUpdate } from '@/lib/types';
+import type { BoardInfo, CompilationJob, OtaProgress, FirebaseStatusUpdate } from '@/lib/types';
 import { database } from '@/lib/firebase';
 import { ref, get, set, child, remove } from 'firebase/database';
 
@@ -66,8 +66,11 @@ export async function startCompilation(payload: { code: string; board: BoardInfo
         timestamp: Date.now(),
         clientInfo: {
             id: CLIENT_ID,
-            url: 'AIoT Studio Web App',
-            timestamp: new Date().toISOString()
+            userAgent: 'AIoT Studio Web App',
+            url: 'https://studio.firebase.google.com',
+            timestamp: new Date().toISOString(),
+            enhanced: true,
+            expectsInstantAck: true,
         }
     });
 
@@ -85,31 +88,32 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
         const data: FirebaseStatusUpdate = snapshot.val();
         
         if (!data) {
-            return { success: true, job: undefined }; // Job not started yet
+            return { success: true, job: undefined }; // Job not started or acknowledged yet
         }
         
-        // Adapt FirebaseStatusUpdate to CompilationJob according to documentation
+        // Adapt FirebaseStatusUpdate to CompilationJob according to the new enhanced API documentation
         const job: CompilationJob = {
             id: jobId,
             status: data.status,
             progress: data.progress,
+            // If history exists, map it. Otherwise, create a single entry from the main status.
             statusUpdates: data.history ? data.history.map(h => ({
                 jobId: jobId,
                 message: h.message,
                 timestamp: new Date(h.timestamp).toISOString(),
                 type: h.type,
-                details: {} // Ensure details field exists
+                details: {}
             })) : [{
                 jobId,
                 message: data.message,
                 timestamp: new Date(data.timestamp).toISOString(),
                 type: data.status === 'failed' ? 'error' : (data.status === 'completed' ? 'success' : 'info'),
-                details: {} // Ensure details field exists
+                details: {}
             }],
-            createdAt: new Date(data.timestamp).toISOString(), // Approximate
+            createdAt: new Date(data.timestamp).toISOString(), // Approximate from first update
             error: data.status === 'failed' ? data.message : undefined,
             result: data.status === 'completed' ? {
-                binary: '', // This will be fetched separately
+                binary: '', // This is just a placeholder; binary is fetched separately
                 filename: data.result?.filename || 'firmware.bin',
                 size: data.result?.size || 0,
             } : undefined,

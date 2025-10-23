@@ -1,4 +1,5 @@
 
+
 export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
 
 export type PipelineStatus = {
@@ -22,11 +23,11 @@ export type HistoryItem = {
   timestamp: Date;
 };
 
-export type CompilationJobStatus = 'created' | 'preparing' | 'compiling' | 'completed' | 'failed' | 'canceled' | 'submitted';
+export type CompilationJobStatus = 'created' | 'preparing' | 'compiling' | 'completed' | 'failed' | 'canceled' | 'submitted' | 'received';
 
-// Represents one log entry from the server's status updates
+// Represents one log entry from the server's status updates, aligned with the new API
 export interface StatusUpdate {
-  timestamp: string;
+  timestamp: string; // ISO 8601 string
   message: string;
   type: 'info' | 'success' | 'error';
   details?: any;
@@ -38,10 +39,10 @@ export interface CompilationJob {
   status: CompilationJobStatus;
   progress?: number;
   statusUpdates: StatusUpdate[];
-  createdAt: string;
-  completedAt?: string;
+  createdAt: string; // ISO 8601 string
+  completedAt?: string; // ISO 8601 string
   result?: {
-    binary: string;
+    binary: string; // This is not the data itself, just a marker.
     filename: string;
     size: number;
   };
@@ -54,37 +55,28 @@ export interface OtaProgress {
     status: 'uploading' | 'success' | 'failed';
 }
 
-// Data structures from Firebase Bridge
+// Data structures from the Enhanced Firebase Bridge API
+export interface FirebaseHistoryEntry {
+  message: string;
+  timestamp: number;
+  type: 'info' | 'success' | 'error';
+}
+
 export interface FirebaseStatusUpdate {
   status: CompilationJobStatus;
   message: string;
   progress?: number;
   elapsed?: number;
   timestamp: number;
-  history?: {
-    message: string;
-    timestamp: number;
-    type: 'info' | 'success' | 'error';
-  }[];
+  history?: FirebaseHistoryEntry[];
   result?: {
     filename: string;
     size: number;
   };
+  enhanced?: {
+    phase: string;
+    totalUpdates: number;
+    totalTime?: number;
+  };
 }
-
-export interface FirebaseCompilationJob {
-    id: string;
-    status: CompilationJobStatus;
-    progress?: number;
-    statusUpdates: FirebaseStatusUpdate[];
-    createdAt: string;
-    completedAt?: string;
-    result?: {
-      binary: string;
-      filename: string;
-      size: number;
-    };
-    error?: string | null;
-}
-
     
