@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -309,7 +310,7 @@ export default function Home() {
     }
   };
 
-  const handleManualAction = async (step: keyof Omit<PipelineStatus, 'codeGen'>) => {
+  const handleManualAction = async (step: keyof Omit<PipelineStatus, 'codeGen'> | 'testConnection') => {
     setIsGenerating(true);
     if (step === 'compile') {
       const health = await checkServerHealth();
@@ -398,3 +399,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
