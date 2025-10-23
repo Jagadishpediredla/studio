@@ -1,6 +1,6 @@
 // src/lib/firebase.ts
 import { initializeApp, getApp, type FirebaseApp } from "firebase/app";
-import { getDatabase } from "firebase/database";
+import { getDatabase, serverTimestamp } from "firebase/database";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBhUn4-n1m07pBmxofnUiDSc9dYSpfsxkg",
@@ -22,4 +22,4 @@ try {
 
 const database = getDatabase(app);
 
-export { app, database };
+export { app, database, serverTimestamp };

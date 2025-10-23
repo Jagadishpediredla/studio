@@ -1,22 +1,20 @@
 
 'use server';
 
-import type { BoardInfo, CompilationJob, OtaProgress, FirebaseStatusUpdate, BuildInfo, JobSummary, JobStatistics, JobDetails } from '@/lib/types';
-import { database } from '@/lib/firebase';
-import { ref, get, set, child, remove, query, orderByChild, equalTo, limitToLast } from 'firebase/database';
+import type { BoardInfo, CompilationJob, OtaProgress, FirebaseStatusUpdate, BuildInfo, JobSummary, JobStatistics, JobDetails, LogEvent } from '@/lib/types';
+import { database, serverTimestamp } from '@/lib/firebase';
+import { ref, get, set, child, remove, query, orderByChild, equalTo, limitToLast, push } from 'firebase/database';
 
-// A simple, session-specific client ID.
-// In a real multi-user app, this would be a stable user or session ID.
-const CLIENT_ID = 'aiot-studio-session'; 
+const CLIENT_USER_ID = 'aiot-studio-user'; 
 
 const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-export async function checkServerHealth() {
-  const healthCheckId = `check_${CLIENT_ID}_${Date.now()}`;
+export async function findActiveDesktopClient(): Promise<{ success: boolean, clientId?: string, error?: string }> {
+  const healthCheckId = `check_cloud-client_${Date.now()}`;
   const healthCheckRef = ref(database, `health_check/${healthCheckId}`);
   
   try {
-    await set(healthCheckRef, { timestamp: Date.now(), client: CLIENT_ID });
+    await set(healthCheckRef, { timestamp: Date.now(), client: 'cloud-client' });
     const desktopsRef = ref(database, 'desktops');
     const desktopsSnapshot = await get(desktopsRef);
     const desktops = desktopsSnapshot.val();
@@ -25,21 +23,21 @@ export async function checkServerHealth() {
       return { success: false, error: 'Connection to Firebase is OK, but no desktop clients are online. Please ensure the bridge is running.' };
     }
 
-    const onlineDesktops = Object.entries(desktops).filter(([_, info]: [string, any]) => {
+    const activeClients = Object.entries(desktops).filter(([_, info]: [string, any]) => {
       if (info.status !== 'online') return false;
       const lastSeen = new Date(info.lastSeen).getTime();
-      return (Date.now() - lastSeen) < 120000; // 2 minutes
+      return (Date.now() - lastSeen) < 30000; // 30 seconds as per docs
     });
 
-    if (onlineDesktops.length === 0) {
-      return { success: false, error: 'Connection to Firebase is OK, but no active desktop clients were found. Check bridge.' };
+    if (activeClients.length === 0) {
+      return { success: false, error: 'Connection to Firebase is OK, but no active desktop clients were found. Check bridge status.' };
     }
 
-    return { success: true, desktopId: onlineDesktops[0][0] };
+    return { success: true, clientId: activeClients[0][0] };
 
   } catch (error: any)
 {
-    console.error('Firebase Health Check Error:', error);
+    console.error('[CLOUD] Firebase Health Check Error:', error);
     let errorMessage = `Failed to connect to Firebase or validate permissions. Check your connection, configuration, and database rules. Details: ${error.message}`;
     return { success: false, error: errorMessage };
   } finally {
@@ -47,25 +45,61 @@ export async function checkServerHealth() {
   }
 }
 
-export async function startCompilation(payload: { code: string; board: BoardInfo; desktopId: string }) {
-  const { code, board, desktopId } = payload;
+export async function submitCompilationRequest(payload: { code: string; board: string; libraries: string[]; desktopId: string }) {
+  const { code, board, libraries, desktopId } = payload;
   const requestId = generateRequestId();
   
   try {
     const requestRef = ref(database, `requests/${desktopId}/${requestId}`);
     await set(requestRef, {
-        code: code,
-        board: board.fqbn,
-        libraries: board.libraries || [],
-        timestamp: Date.now()
+        code,
+        board,
+        libraries,
+        timestamp: serverTimestamp(),
+        clientMetadata: {
+          userId: CLIENT_USER_ID,
+          source: 'web-app',
+        }
     });
 
-    return { success: true, jobId: requestId };
+    return { success: true, requestId };
 
   } catch (error: any) {
-    return { success: false, error: `Failed to submit compilation request to Firebase: ${error.message}` };
+    return { success: false, error: `[CLOUD] Failed to submit compilation request to Firebase: ${error.message}` };
   }
 }
+
+export async function writeClientLog(logId: string, event: string, message: string, data: object = {}) {
+    const timestamp = Date.now();
+    try {
+        const clientEventsRef = ref(database, `logs/${logId}/clientSide/events`);
+        await push(clientEventsRef, {
+            timestamp,
+            event,
+            message,
+            data
+        });
+
+        const timelineRef = ref(database, `logs/${logId}/timeline`);
+        await push(timelineRef, {
+            timestamp,
+            source: 'client',
+            event,
+            message
+        });
+
+        const updatedAtRef = ref(database, `logs/${logId}/updatedAt`);
+        await set(updatedAtRef, timestamp);
+        return { success: true };
+    } catch (error: any) {
+        console.error(`[CLOUD] Failed to write client log to Firebase: ${error.message}`);
+        return { success: false, error: error.message };
+    }
+}
+
+
+// Functions below are for the dashboard and are not part of the main compilation workflow yet.
+// They will be updated in a future step.
 
 export async function getCompilationJobStatus(jobId: string): Promise<{ success: boolean; job?: CompilationJob; error?: string }> {
     try {
@@ -82,7 +116,10 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
             status: data.status,
             progress: data.progress,
             message: data.message,
+            phase: data.phase,
             timestamp: new Date(data.timestamp).toISOString(),
+            logId: data.logId,
+            buildId: data.buildId,
         };
 
         return { success: true, job };
@@ -92,18 +129,15 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
     }
 }
 
-export async function getBuildInfo(requestId: string): Promise<{ success: boolean; build?: BuildInfo; error?: string }> {
+export async function getBuildInfo(buildId: string): Promise<{ success: boolean; build?: BuildInfo; error?: string }> {
     try {
-        const buildsRef = query(ref(database, 'builds'), orderByChild('requestId'), equalTo(requestId));
-        const snapshot = await get(buildsRef);
-        const builds = snapshot.val();
+        const buildRef = ref(database, `builds/${buildId}`);
+        const snapshot = await get(buildRef);
+        const buildData = snapshot.val();
 
-        if (!builds) {
-            return { success: false, error: 'Build not found for the given request ID.' };
+        if (!buildData) {
+            return { success: false, error: `Build ${buildId} not found.` };
         }
-
-        const buildId = Object.keys(builds)[0];
-        const buildData = builds[buildId];
 
         const buildInfo: BuildInfo = {
             buildId: buildId,
@@ -111,6 +145,10 @@ export async function getBuildInfo(requestId: string): Promise<{ success: boolea
             board: buildData.board,
             status: buildData.status,
             files: buildData.files,
+            totalFiles: buildData.totalFiles,
+            logId: buildData.logId,
+            clientId: buildData.clientId,
+            timestamp: buildData.timestamp,
         };
 
         return { success: true, build: buildInfo };
@@ -119,7 +157,7 @@ export async function getBuildInfo(requestId: string): Promise<{ success: boolea
     }
 }
 
-export async function getBinary(buildId: string, fileType: 'hex' | 'bin' = 'bin') {
+export async function getBinary(buildId: string, fileType: 'hex' | 'bin' | 'elf' = 'bin') {
     try {
         const binaryRef = ref(database, `binaries/${buildId}/${fileType}`);
         const snapshot = await get(binaryRef);
@@ -135,39 +173,8 @@ export async function getBinary(buildId: string, fileType: 'hex' | 'bin' = 'bin'
     }
 }
 
-// Placeholder function to fix OTA page
-export async function performOtaUpdate(
-  fileName: string,
-  deviceId: string,
-  onProgress: (progress: OtaProgress) => void
-) {
-  const steps = [
-    { progress: 10, message: 'Connecting to device...' },
-    { progress: 25, message: 'Authenticating...' },
-    { progress: 50, message: `Sending firmware ${fileName}...` },
-    { progress: 75, message: 'Flashing...' },
-    { progress: 90, message: 'Rebooting device...' },
-  ];
 
-  for (const step of steps) {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    onProgress({
-      message: step.message,
-      progress: step.progress,
-      status: 'uploading',
-    });
-  }
-
-  await new Promise(resolve => setTimeout(resolve, 800));
-  onProgress({
-    message: 'Update complete!',
-    progress: 100,
-    status: 'success',
-  });
-}
-
-
-// Actions for the new Job Dashboard
+// Actions for the Job Dashboard
 export async function getJobs(
   limit: number = 50, 
   status?: string, 
@@ -235,5 +242,3 @@ export async function getJobDetails(jobId: string): Promise<JobDetails | { succe
         return { success: false, error: error.message };
     }
 }
-
-    
