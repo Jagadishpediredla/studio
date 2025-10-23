@@ -1,10 +1,9 @@
 
 'use server';
 
-import type { BoardInfo, CompilationJob, OtaProgress, FirebaseStatusUpdate, BuildInfo } from '@/lib/types';
+import type { BoardInfo, CompilationJob, OtaProgress, FirebaseStatusUpdate, BuildInfo, JobSummary, JobStatistics, JobDetails } from '@/lib/types';
 import { database } from '@/lib/firebase';
-import { ref, get, set, child, remove, query, orderByChild, equalTo } from 'firebase/database';
-
+import { ref, get, set, child, remove, query, orderByChild, equalTo, limitToLast } from 'firebase/database';
 
 // A simple, session-specific client ID.
 // In a real multi-user app, this would be a stable user or session ID.
@@ -17,11 +16,7 @@ export async function checkServerHealth() {
   const healthCheckRef = ref(database, `health_check/${healthCheckId}`);
   
   try {
-    // 1. Test WRITE permission by writing a temporary value.
-    // The .validate rule in the database ensures this data has the correct shape.
     await set(healthCheckRef, { timestamp: Date.now(), client: CLIENT_ID });
-
-    // 2. Test READ permission by checking for online desktops.
     const desktopsRef = ref(database, 'desktops');
     const desktopsSnapshot = await get(desktopsRef);
     const desktops = desktopsSnapshot.val();
@@ -40,7 +35,6 @@ export async function checkServerHealth() {
       return { success: false, error: 'Connection to Firebase is OK, but no active desktop clients were found. Check bridge.' };
     }
 
-    // Return the ID of the first available desktop client
     return { success: true, desktopId: onlineDesktops[0][0] };
 
   } catch (error: any)
@@ -49,8 +43,7 @@ export async function checkServerHealth() {
     let errorMessage = `Failed to connect to Firebase or validate permissions. Check your connection, configuration, and database rules. Details: ${error.message}`;
     return { success: false, error: errorMessage };
   } finally {
-    // 3. Clean up the temporary health check entry.
-    await remove(healthCheckRef).catch(() => {}); // Try to clean up, but don't fail the whole operation if it fails.
+    await remove(healthCheckRef).catch(() => {});
   }
 }
 
@@ -81,12 +74,9 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
         const data: FirebaseStatusUpdate = snapshot.val();
         
         if (!data) {
-            // If there's no data, it means the job hasn't been picked up.
-            // Return undefined so the UI can show a "waiting" message.
             return { success: true, job: undefined };
         }
         
-        // Adapt simple FirebaseStatusUpdate to the CompilationJob
         const job: CompilationJob = {
             id: jobId,
             status: data.status,
@@ -129,7 +119,6 @@ export async function getBuildInfo(requestId: string): Promise<{ success: boolea
     }
 }
 
-
 export async function getBinary(buildId: string, fileType: 'hex' | 'bin' = 'bin') {
     try {
         const binaryRef = ref(database, `binaries/${buildId}/${fileType}`);
@@ -146,53 +135,71 @@ export async function getBinary(buildId: string, fileType: 'hex' | 'bin' = 'bin'
     }
 }
 
+// Actions for the new Job Dashboard
+export async function getJobs(
+  limit: number = 50, 
+  status?: string, 
+  userId?: string
+): Promise<{ success: boolean; jobs?: JobSummary[], statistics?: JobStatistics, error?: string }> {
+    try {
+        const jobsRef = query(ref(database, 'job_logs'), limitToLast(limit));
+        const snapshot = await get(jobsRef);
+        const allJobsData = snapshot.val() || {};
+        
+        let allJobs: JobDetails[] = Object.values(allJobsData);
 
-export async function performOtaUpdate(
-  fileName: string,
-  deviceId: string,
-  onProgress: (update: OtaProgress) => void
-) {
-  const steps = [
-    { message: `Connecting to device ${deviceId}...`, duration: 1500, progress: 10 },
-    { message: 'Authenticating...', duration: 1000, progress: 20 },
-    { message: 'Device authenticated. Preparing for upload...', duration: 500, progress: 25 },
-    { message: `Beginning firmware upload: ${fileName}`, duration: 100, progress: 30 },
-    { message: 'Uploading chunk 1 of 4...', duration: 2000, progress: 50 },
-    { message: 'Uploading chunk 2 of 4...', duration: 2000, progress: 70 },
-    { message: 'Uploading chunk 3 of 4...', duration: 2000, progress: 90 },
-    { message: 'Uploading chunk 4 of 4...', duration: 1500, progress: 99 },
-    { message: 'Finalizing upload...', duration: 1000, progress: 100 },
-    { message: 'Verifying checksum...', duration: 1500, progress: 100, status: 'verifying' },
-    { message: 'Checksum valid. Device is rebooting.', duration: 2000, progress: 100, status: 'rebooting' },
-  ];
+        // Filter locally
+        if (status) {
+            allJobs = allJobs.filter(job => job.status === status);
+        }
+        if (userId) {
+            allJobs = allJobs.filter(job => job.sender?.userId === userId);
+        }
 
-  let accumulatedDelay = 0;
-  for (const step of steps) {
-    accumulatedDelay += step.duration;
-    setTimeout(() => {
-      onProgress({
-        message: step.message,
-        progress: step.progress,
-        status: 'uploading',
-      });
-    }, accumulatedDelay);
-  }
+        const jobSummaries: JobSummary[] = allJobs.map(job => ({
+            jobId: job.jobId,
+            status: job.status,
+            progress: job.progress,
+            createdAt: job.createdAt,
+            duration: job.build?.duration,
+            board: job.hardware?.board,
+            codeLength: job.code?.length,
+            sender: job.sender,
+            buildId: job.build?.buildId,
+        })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()); // Most recent first
 
-  // Simulate success or failure
-  setTimeout(() => {
-    const isSuccess = Math.random() > 0.1; // 90% success rate
-    if (isSuccess) {
-      onProgress({
-        message: 'Update complete. Device is online.',
-        progress: 100,
-        status: 'success',
-      });
-    } else {
-      onProgress({
-        message: 'Error: Checksum mismatch. Please try again.',
-        progress: 100,
-        status: 'failed',
-      });
+        const completedJobs = allJobs.filter(j => j.status === 'completed');
+        const totalDuration = completedJobs.reduce((sum, job) => sum + (job.build?.duration || 0), 0);
+
+        const statistics: JobStatistics = {
+            totalJobs: allJobs.length,
+            completedJobs: completedJobs.length,
+            failedJobs: allJobs.filter(j => j.status === 'failed').length,
+            averageDuration: completedJobs.length > 0 ? totalDuration / completedJobs.length : 0,
+        };
+
+        return { success: true, jobs: jobSummaries, statistics };
+
+    } catch (error: any) {
+        console.error("Failed to fetch jobs:", error);
+        return { success: false, error: error.message };
     }
-  }, accumulatedDelay + 1000);
+}
+
+export async function getJobDetails(jobId: string): Promise<JobDetails | { success: false, error: string }> {
+    try {
+        const jobRef = ref(database, `job_logs/${jobId}`);
+        const snapshot = await get(jobRef);
+        const jobData = snapshot.val();
+
+        if (!jobData) {
+            return { success: false, error: `Job with ID ${jobId} not found.` };
+        }
+        
+        return { success: true, ...jobData };
+
+    } catch (error: any) {
+        console.error(`Failed to fetch details for job ${jobId}:`, error);
+        return { success: false, error: error.message };
+    }
 }

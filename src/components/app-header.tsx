@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -8,7 +9,7 @@ import DeploymentPipeline from "@/components/deployment-pipeline";
 import StatusIndicator from "@/components/status-indicator";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
-import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, ServerCrash } from "lucide-react";
+import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, ServerCrash, LayoutDashboard } from "lucide-react";
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   pipelineStatus: PipelineStatus;
@@ -84,6 +85,12 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
             </div>
         </div>
         <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+                <Link href="/dashboard">
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    Job Dashboard
+                </Link>
+            </Button>
             <Button variant="outline" onClick={onShowHistory}>
                 <History className="mr-2 h-4 w-4" />
                 Version History

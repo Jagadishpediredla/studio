@@ -29,7 +29,7 @@ export interface StatusUpdate {
   type: 'info' | 'success' | 'error';
 }
 
-// Represents the direct status object from Firebase
+// Represents the direct status object from Firebase (legacy)
 export interface FirebaseStatusUpdate {
   status: 'acknowledged' | 'preparing' | 'compiling' | 'uploading' | 'completed' | 'failed';
   message: string;
@@ -37,7 +37,7 @@ export interface FirebaseStatusUpdate {
   timestamp: number;
 }
     
-// Simplified CompilationJob for the frontend
+// Simplified CompilationJob for the frontend (legacy)
 export interface CompilationJob {
   id: string;
   status: 'acknowledged' | 'preparing' | 'compiling' | 'uploading' | 'completed' | 'failed';
@@ -62,4 +62,126 @@ export interface OtaProgress {
     message: string;
     progress: number;
     status: 'uploading' | 'success' | 'failed';
+}
+
+
+// New Enhanced Types from Final Documentation
+
+export interface JobStatistics {
+  totalJobs: number;
+  completedJobs: number;
+  failedJobs: number;
+  averageDuration: number;
+}
+
+export interface JobSummary {
+  jobId: string;
+  status: string;
+  progress: number;
+  createdAt: string;
+  duration?: number;
+  board?: string;
+  codeLength?: number;
+  sender?: { userId?: string; source?: string };
+  buildId?: string;
+}
+
+export interface JobDetails {
+  success: boolean;
+  jobId: string;
+  status: string;
+  progress: number;
+  createdAt: string;
+  lastUpdated: string;
+  code?: {
+    length: number;
+    lines: number;
+    hash: string;
+    includes: string[];
+    functions: string[];
+  };
+  hardware?: {
+    board: string;
+    libraries: string[];
+    requiredCores: string;
+  };
+  sender?: {
+    source: string;
+    userId: string;
+    sessionId: string;
+    userAgent: string;
+    ip: string;
+    platform: string;
+  };
+  cloudSync?: {
+    firebaseConnected: boolean;
+    lastSyncTime: string;
+    syncAttempts: number;
+    syncErrors: any[];
+    realTimeUpdates: boolean;
+  };
+  build?: {
+    buildId: string;
+    startTime: string;
+    endTime: string;
+    duration: number;
+    success: boolean;
+    binaryFiles: {
+      filename: string;
+      type: string;
+      size: number;
+      generatedAt: string;
+    }[];
+    compilerOutput: {
+      timestamp: string;
+      output: string;
+      type: string;
+    }[];
+    errors: any[];
+    warnings: any[];
+  };
+  system?: {
+    hostname: string;
+    platform: string;
+    nodeVersion: string;
+    memoryUsage: object;
+    cpuUsage: object;
+  };
+  performance?: {
+    phases: {
+      [key: string]: {
+        duration: number;
+        startTime: string;
+        endTime: string;
+      };
+    };
+    bottlenecks: any[];
+  };
+  timeline?: {
+    timestamp: string;
+    status: string;
+    message: string;
+    progress: number;
+    phase: string;
+    cloudSync: {
+      attempted: boolean;
+      success: boolean;
+      latency: number;
+    };
+  }[];
+  isRunning?: boolean;
+  isCompleted?: boolean;
+  isFailed?: boolean;
+  downloads?: {
+    [key: string]: string;
+  };
+  error?: string;
+}
+
+export interface JobLogData {
+    metadata: any;
+    timeline: any[];
+    compilation: any;
+    performance: any;
+    system: any;
 }
