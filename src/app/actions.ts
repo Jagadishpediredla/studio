@@ -88,7 +88,7 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
             return { success: true, job: undefined }; // Job not started yet
         }
         
-        // Adapt FirebaseStatusUpdate to CompilationJob
+        // Adapt FirebaseStatusUpdate to CompilationJob according to documentation
         const job: CompilationJob = {
             id: jobId,
             status: data.status,
@@ -103,7 +103,7 @@ export async function getCompilationJobStatus(jobId: string): Promise<{ success:
                 jobId,
                 message: data.message,
                 timestamp: new Date(data.timestamp).toISOString(),
-                type: data.status === 'failed' ? 'error' : 'info',
+                type: data.status === 'failed' ? 'error' : (data.status === 'completed' ? 'success' : 'info'),
                 details: {} // Ensure details field exists
             }],
             createdAt: new Date(data.timestamp).toISOString(), // Approximate
@@ -189,5 +189,7 @@ export async function performOtaUpdate(
     }
   }, accumulatedDelay + 1000);
 }
+
+    
 
     
