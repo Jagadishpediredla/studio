@@ -72,6 +72,17 @@ export default function Home() {
   const updatePipeline = (step: keyof PipelineStatus, status: PipelineStep) => {
     setPipelineStatus(prev => ({ ...prev, [step]: status }));
   };
+  
+  const addLog = (message: string, type: StatusUpdate['type'] = 'info') => {
+    const newLog: StatusUpdate = {
+        message,
+        type,
+        timestamp: new Date().toISOString(),
+    };
+    setCompilationLogs(prev => [...prev, newLog]);
+    setCurrentStatus(message);
+  };
+
 
   const stopPolling = () => {
     if (pollingIntervalRef.current) {
@@ -86,15 +97,13 @@ export default function Home() {
   }, []);
   
   const handleFirmwareDownload = async (buildId: string) => {
-    setCurrentStatus(`[Client] Requesting binary for build ${buildId}...`);
-    setCompilationLogs(prev => [...prev, { type: 'info', message: `[Client] Requesting binary from /binaries/${buildId}/bin`, timestamp: new Date().toISOString() }]);
-
+    addLog(`[Client] Requesting binary for build ${buildId} from /binaries/${buildId}/bin`);
+    
     const result = await getBinary(buildId, 'bin'); // Default to .bin for ESP32
     if (!result.success || !result.binary) {
       const errorMsg = `Download Failed: ${result.error || 'No binary data found.'}`;
+      addLog(`[Client] ${errorMsg}`, 'error');
       toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
-      setCurrentStatus(`[Client] ${errorMsg}`);
-      setCompilationLogs(prev => [...prev, { type: 'error', message: `[Client] ${errorMsg}`, timestamp: new Date().toISOString() }]);
       return;
     }
     
@@ -113,34 +122,29 @@ export default function Home() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
     const successMsg = `Firmware "${a.download}" downloaded successfully.`;
-    setCurrentStatus(`[Client] ${successMsg}`);
-    setCompilationLogs(prev => [...prev, { type: 'success', message: `[Client] ${successMsg}`, timestamp: new Date().toISOString() }]);
+    addLog(`[Client] ${successMsg}`, 'success');
     toast({ title: 'Success', description: successMsg });
   };
 
 
   const runCompileStep = async (desktopId: string): Promise<string | null> => {
     updatePipeline('compile', 'processing');
-    const statusMsg = `[Client] Submitting job to desktop client '${desktopId}'...`;
-    setCurrentStatus(statusMsg);
-    const logMsg = `[Firebase] Writing to /requests/${desktopId}/{requestId}`;
-    setCompilationLogs(prev => [...prev, { type: 'info', message: statusMsg, timestamp: new Date().toISOString() }, { type: 'info', message: logMsg, timestamp: new Date().toISOString() }]);
+    addLog(`[Client] Submitting job to desktop client '${desktopId}'...`);
     
     const payload = { code, board: boardInfo, desktopId };
     
     const result = await startCompilation(payload);
 
     if (result.success && result.jobId) {
-      const successMsg = `[Firebase] Job submitted with ID: ${result.jobId}`;
-      setCurrentStatus(successMsg);
-      setCompilationLogs(prev => [...prev, { type: 'success', message: successMsg, timestamp: new Date().toISOString() }]);
+      addLog(`[Firebase] Writing to /requests/${desktopId}/${result.jobId}`, 'success');
+      addLog(`[Client] Job submitted with ID: ${result.jobId}.`);
       return result.jobId;
     } else {
       updatePipeline('compile', 'failed');
       const errorMessage = result.error || 'Failed to start compilation job via Firebase.';
-      setCurrentStatus(`[Client] Error: ${errorMessage}`);
-      setCompilationLogs(prev => [...prev, { type: 'error', message: `[Client] Error: ${errorMessage}`, timestamp: new Date().toISOString() }]);
+      addLog(`[Client] Error: ${errorMessage}`, 'error');
       toast({ 
         title: 'Compilation Failed', 
         description: errorMessage, 
@@ -155,22 +159,13 @@ export default function Home() {
     stopPolling(); // Clear any existing polling interval
 
     pollingIntervalRef.current = setInterval(async () => {
-      const pollingMsg = `[Firebase] Polling status for job ${jobId} at /status/${jobId}`;
-      setCompilationLogs(prev => {
-        // To avoid spamming, only add polling message if it's not the last one
-        if (prev.length > 0 && prev[prev.length -1].message.startsWith('[Firebase] Polling status')) {
-           return prev;
-        }
-        return [...prev, { type: 'info', message: pollingMsg, timestamp: new Date().toISOString() }];
-      });
       const result = await getCompilationJobStatus(jobId);
       
       if (!result.success) {
         stopPolling();
         updatePipeline('compile', 'failed');
         const errorMsg = result.error || 'Failed to get job status from Firebase.';
-        setCurrentStatus(`[Client] Error: ${errorMsg}`);
-        setCompilationLogs(prev => [...prev, { type: 'error', message: `[Client] Error: ${errorMsg}`, timestamp: new Date().toISOString() }]);
+        addLog(`[Client] Error: ${errorMsg}`, 'error');
         toast({ title: 'Polling Error', description: errorMsg, variant: 'destructive' });
         setIsGenerating(false);
         return;
@@ -179,31 +174,28 @@ export default function Home() {
       const job: CompilationJob | undefined = result.job;
 
       if (!job) {
-        const waitMsg = `[Client] Job ${jobId}: Waiting for desktop client to pick up the request...`;
-        setCurrentStatus(waitMsg);
+        addLog(`[Client] Job ${jobId}: Waiting for desktop client to pick up the request...`);
         return;
       }
       
+      // Stop polling to prevent duplicate logs from this point
+      stopPolling();
+
       const newLog: StatusUpdate = { message: `[Server] ${job.message}`, timestamp: job.timestamp, type: job.status === 'failed' ? 'error' : 'info' };
       setCompilationLogs(prev => {
         if (prev.some(log => log.message === newLog.message)) return prev;
         return [...prev, newLog];
       });
       setCurrentStatus(`[Server] ${job.message}` || `Job ${job.id}: ${job.status}...`);
-      
+
       if (job.status === 'completed') {
-        stopPolling();
         updatePipeline('compile', 'completed');
-        const successMsg = '[Server] Compilation successful. Fetching build information...';
-        setCurrentStatus(successMsg);
-        setCompilationLogs(prev => [...prev, { type: 'success', message: successMsg, timestamp: new Date().toISOString() }]);
+        addLog('[Server] Compilation successful. Fetching build information...', 'success');
         
         const buildInfoResult = await getBuildInfo(jobId);
         if (buildInfoResult.success && buildInfoResult.build) {
           const buildId = buildInfoResult.build.buildId;
-          const buildMsg = `[Firebase] Build ${buildId} found. Requesting firmware binary...`;
-          setCurrentStatus(buildMsg);
-          setCompilationLogs(prev => [...prev, { type: 'info', message: buildMsg, timestamp: new Date().toISOString() }]);
+          addLog(`[Firebase] Build ${buildId} found for request ${jobId}.`);
           await handleFirmwareDownload(buildId);
           const uploadSuccess = await runPlaceholderStep('upload');
           if (uploadSuccess) {
@@ -212,17 +204,15 @@ export default function Home() {
         } else {
           updatePipeline('compile', 'failed');
           const errorMsg = buildInfoResult.error || 'Failed to retrieve build info after compilation.';
-          setCurrentStatus(`[Client] Error: ${errorMsg}`);
-          setCompilationLogs(prev => [...prev, { type: 'error', message: `[Client] Error: ${errorMsg}`, timestamp: new Date().toISOString() }]);
+          addLog(`[Client] Error: ${errorMsg}`, 'error');
           toast({ title: 'Build Info Failed', description: errorMsg, variant: 'destructive' });
         }
         setIsGenerating(false);
 
       } else if (job.status === 'failed') {
-        stopPolling();
         updatePipeline('compile', 'failed');
         const errorMsg = job.message || 'An unknown compilation error occurred.';
-        setCurrentStatus(`[Server] Compilation Failed: ${errorMsg}`);
+        addLog(`[Server] Compilation Failed: ${errorMsg}`, 'error');
         const errorDescription = (
             <div>
                 <p className="font-semibold">Compilation failed. See details below:</p>
@@ -233,6 +223,10 @@ export default function Home() {
         );
         toast({ title: 'Compilation Failed', description: errorDescription, variant: 'destructive', duration: 20000 });
         setIsGenerating(false);
+      } else {
+         // If not completed or failed, we need to continue polling.
+         // Re-enable polling with a fresh interval to check for the next status.
+         pollCompilationStatus(jobId);
       }
 
     }, 3000); // Poll every 3 seconds
@@ -241,15 +235,11 @@ export default function Home() {
   const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile' | 'serverCheck'>): Promise<boolean> => {
     return new Promise((resolve) => {
       updatePipeline(step, 'processing');
-      const statusMsg = `[Client] Simulating ${step} step...`;
-      setCurrentStatus(statusMsg);
-      setCompilationLogs(prev => [...prev, { type: 'info', message: statusMsg, timestamp: new Date().toISOString()}]);
+      addLog(`[Client] Simulating ${step} step...`);
       const duration = 1500 + Math.random() * 1000;
       setTimeout(() => {
         updatePipeline(step, 'completed');
-        const completeMsg = `[Client] Simulated ${step} step complete.`;
-        setCurrentStatus(completeMsg);
-        setCompilationLogs(prev => [...prev, { type: 'success', message: completeMsg, timestamp: new Date().toISOString() }]);
+        addLog(`[Client] Simulated ${step} step complete.`, 'success');
         toast({ title: 'Step Complete', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step is simulated.` });
         resolve(true);
       }, duration);
@@ -266,34 +256,25 @@ export default function Home() {
     setPipelineStatus({ serverCheck: 'pending', codeGen: 'pending', compile: 'pending', upload: 'pending', verify: 'pending' });
     setCompilationLogs([]);
     
-    let log_msg = '[Client] Starting pipeline...';
-    setCurrentStatus(log_msg);
-    setCompilationLogs(prev => [...prev, { type: 'info', message: log_msg, timestamp: new Date().toISOString() }]);
+    addLog('[Client] Starting pipeline...');
     
     updatePipeline('serverCheck', 'processing');
-    log_msg = '[Client] Checking for online desktop clients...';
-    setCurrentStatus(log_msg);
-    setCompilationLogs(prev => [...prev, { type: 'info', message: log_msg, timestamp: new Date().toISOString() }]);
+    addLog('[Client] Checking for online desktop clients...');
     const health = await checkServerHealth();
 
     if (!health.success || !health.desktopId) {
       updatePipeline('serverCheck', 'failed');
       const errorMessage = health.error || 'No online desktop clients found.';
-      setCurrentStatus(`[Client] Error: ${errorMessage}`);
-      setCompilationLogs(prev => [...prev, { type: 'error', message: `[Client] Error: ${errorMessage}`, timestamp: new Date().toISOString() }]);
+      addLog(`[Client] Error: ${errorMessage}`, 'error');
       toast({ title: 'Health Check Failed', description: errorMessage, variant: 'destructive', duration: 20000 });
       setIsGenerating(false);
       return;
     }
     updatePipeline('serverCheck', 'completed');
-    log_msg = `[Firebase] Found online client: ${health.desktopId}.`;
-    setCurrentStatus(log_msg);
-    setCompilationLogs(prev => [...prev, { type: 'success', message: log_msg, timestamp: new Date().toISOString() }]);
+    addLog(`[Firebase] Found online client: ${health.desktopId}.`, 'success');
 
     updatePipeline('codeGen', 'processing');
-    log_msg = '[Client] Generating code with AI...';
-    setCurrentStatus(log_msg);
-    setCompilationLogs(prev => [...prev, { type: 'info', message: log_msg, timestamp: new Date().toISOString() }]);
+    addLog('[Client] Generating code with AI...');
 
     const currentHistoryItem: HistoryItem = { id: crypto.randomUUID(), code, board: boardInfo, visualizerHtml: visualizerHtml, timestamp: new Date(), prompt };
     setHistory(prev => [currentHistoryItem, ...prev]);
@@ -306,13 +287,12 @@ export default function Home() {
       setBoardInfo(newBoardInfo);
       updatePipeline('codeGen', 'completed');
       
-      log_msg = '[Client] Code generation complete.';
-      setCurrentStatus(log_msg);
-      setCompilationLogs(prev => [...prev, { type: 'success', message: log_msg, timestamp: new Date().toISOString() }]);
+      addLog('[Client] Code generation complete.', 'success');
       
       const visPromise = generateVisualExplanation({ code: newCode }).then(({ html: newVisualizerHtml }) => {
         setVisualizerHtml(newVisualizerHtml);
-        setCompilationLogs(prev => [...prev, { type: 'success', message: '[Client] AI Visualizer updated.', timestamp: new Date().toISOString() }]);
+        addLog('[Client] AI Visualizer updated.', 'success');
+
       });
       
       toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
@@ -335,7 +315,7 @@ export default function Home() {
         updatePipeline('codeGen', 'failed');
         setHistory(prev => prev.slice(1)); // Revert history only if code gen failed
       }
-      setCompilationLogs(prev => [...prev, { type: 'error', message: `[Client] Pipeline Failed: ${message}`, timestamp: new Date().toISOString() }]);
+      addLog(`[Client] Pipeline Failed: ${message}`, 'error');
       toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });
       setIsGenerating(false);
       stopPolling();
