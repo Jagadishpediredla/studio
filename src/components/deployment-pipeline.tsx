@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from 'react';
-import { Wand2, Cog, UploadCloud, ShieldCheck, ChevronRight, Loader, XCircle, CheckCircle2 } from "lucide-react";
+import { Wand2, Cog, UploadCloud, ShieldCheck, ChevronRight, Loader, XCircle, CheckCircle2, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus, PipelineStep } from "@/lib/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -11,6 +11,7 @@ interface DeploymentPipelineProps {
 }
 
 const stepConfig = {
+  serverCheck: { label: "Server Check", icon: Wifi },
   codeGen: { label: "Code Gen", icon: Wand2 },
   compile: { label: "Compile", icon: Cog },
   upload: { label: "Upload", icon: UploadCloud },

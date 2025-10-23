@@ -57,6 +57,7 @@ export default function Home() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({
+    serverCheck: 'pending',
     codeGen: 'pending',
     compile: 'pending',
     upload: 'pending',
@@ -237,7 +238,7 @@ export default function Home() {
     }, 3000); // Poll every 3 seconds
   };
   
-  const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile'>): Promise<boolean> => {
+  const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile' | 'serverCheck'>): Promise<boolean> => {
     return new Promise((resolve) => {
       updatePipeline(step, 'processing');
       const statusMsg = `[Client] Simulating ${step} step...`;
@@ -262,20 +263,21 @@ export default function Home() {
       return;
     }
     setIsGenerating(true);
-    setPipelineStatus({ codeGen: 'pending', compile: 'pending', upload: 'pending', verify: 'pending' });
+    setPipelineStatus({ serverCheck: 'pending', codeGen: 'pending', compile: 'pending', upload: 'pending', verify: 'pending' });
     setCompilationLogs([]);
     
     let log_msg = '[Client] Starting pipeline...';
     setCurrentStatus(log_msg);
     setCompilationLogs(prev => [...prev, { type: 'info', message: log_msg, timestamp: new Date().toISOString() }]);
     
+    updatePipeline('serverCheck', 'processing');
     log_msg = '[Client] Checking for online desktop clients...';
     setCurrentStatus(log_msg);
     setCompilationLogs(prev => [...prev, { type: 'info', message: log_msg, timestamp: new Date().toISOString() }]);
     const health = await checkServerHealth();
 
     if (!health.success || !health.desktopId) {
-      updatePipeline('compile', 'failed');
+      updatePipeline('serverCheck', 'failed');
       const errorMessage = health.error || 'No online desktop clients found.';
       setCurrentStatus(`[Client] Error: ${errorMessage}`);
       setCompilationLogs(prev => [...prev, { type: 'error', message: `[Client] Error: ${errorMessage}`, timestamp: new Date().toISOString() }]);
@@ -283,7 +285,7 @@ export default function Home() {
       setIsGenerating(false);
       return;
     }
-
+    updatePipeline('serverCheck', 'completed');
     log_msg = `[Firebase] Found online client: ${health.desktopId}.`;
     setCurrentStatus(log_msg);
     setCompilationLogs(prev => [...prev, { type: 'success', message: log_msg, timestamp: new Date().toISOString() }]);
@@ -369,9 +371,11 @@ export default function Home() {
     } else if (step === 'testConnection') {
       await handleTestConnection();
       setIsGenerating(false);
-    } else {
+    } else if (step !== 'serverCheck') {
       await runPlaceholderStep(step);
       setIsGenerating(false);
+    } else {
+        setIsGenerating(false);
     }
   }
 
@@ -440,5 +444,3 @@ export default function Home() {
     </div>
   );
 }
-
-    

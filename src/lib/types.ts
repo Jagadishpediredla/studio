@@ -2,6 +2,7 @@
 export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
 
 export type PipelineStatus = {
+  serverCheck: PipelineStep;
   codeGen: PipelineStep;
   compile: PipelineStep;
   upload: PipelineStep;
