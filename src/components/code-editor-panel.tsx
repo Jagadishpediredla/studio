@@ -50,12 +50,12 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo }: CodeE
             <div className="flex items-center gap-2">
               <Code className="h-4 w-4" />
               <span>Board (FQBN):</span>
-              <Badge variant="secondary">{boardInfo.fqbn}</Badge>
+              <Badge variant="secondary">{boardInfo?.fqbn || '...'}</Badge>
             </div>
             <div className="flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
               <span>Libraries:</span>
-              {boardInfo.libraries.length > 0 ? (
+              {boardInfo?.libraries && boardInfo.libraries.length > 0 ? (
                 boardInfo.libraries.map(lib => <Badge key={lib} variant="secondary">{lib}</Badge>)
               ) : (
                 <Badge variant="outline">None</Badge>
