@@ -482,10 +482,13 @@ Generate the new, complete code block now.
       const message = error.message || 'An error occurred during the pipeline.';
       if (pipelineStatus.codeGen !== 'completed') {
         updatePipeline('codeGen', 'failed');
+        addLog(`[AIDE] Pipeline Failed: ${message}`, 'error');
+        setChatHistory(prev => [...prev, { role: 'assistant', content: `I ran into an error: ${message}` }]);
+        toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });
+      } else {
+        // If code gen succeeded but a later step failed, the log is already handled elsewhere.
+        // We just need to stop the loading spinner.
       }
-      addLog(`[AIDE] Pipeline Failed: ${message}`, 'error');
-      setChatHistory(prev => [...prev, { role: 'assistant', content: `I ran into an error: ${message}` }]);
-      toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });
       setIsGenerating(false);
       cleanupListeners();
     }
