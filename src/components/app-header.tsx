@@ -5,26 +5,20 @@ import * as React from 'react';
 import Link from 'next/link';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import DeploymentPipeline from "@/components/deployment-pipeline";
-import StatusIndicator from "@/components/status-indicator";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
-import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, ServerCrash, LayoutDashboard, Home } from "lucide-react";
+import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, LayoutDashboard } from "lucide-react";
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
-  pipelineStatus: PipelineStatus;
   onManualAction: (step: keyof Omit<PipelineStatus, 'codeGen'> | 'testConnection') => void;
   onShowHistory: () => void;
   isGenerating: boolean;
-  currentStatus: string;
 }
 
-export default function AppHeader({ pipelineStatus, onManualAction, onShowHistory, isGenerating, currentStatus, className, ...props }: AppHeaderProps) {
-  const isActionInProgress = Object.values(pipelineStatus).some(status => status === 'processing');
-
+export default function AppHeader({ onManualAction, onShowHistory, isGenerating, className, ...props }: AppHeaderProps) {
+  
   return (
-    <header className={cn("flex flex-col gap-4 p-4 rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props}>
-      <div className="flex items-center justify-between">
+    <header className={cn("flex items-center justify-between p-2 border-b", className)} {...props}>
         <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-2">
                 <svg
@@ -50,8 +44,7 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
                     strokeWidth="16"
                   />
                   <path
-                    d="M168,140a7.8,7.8
-,0,0,1-8,8,12,12,0,0,1-12-12,8,8,0,0,1,16,0,12,12,0,0,1-12,12,7.8,7.8,0,0,1-8-8"
+                    d="M168,140a7.8,7.8,0,0,1-8,8,12,12,0,0,1-12-12,8,8,0,0,1,16,0,12,12,0,0,1-12,12,7.8,7.8,0,0,1-8-8"
                     fill="none"
                     stroke="currentColor"
                     strokeLinecap="round"
@@ -76,7 +69,6 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
                     fill="none"
                     stroke="currentColor"
                     strokeLinecap="round"
-
                     strokeLinejoin="round"
                     strokeWidth="16"
                   />
@@ -85,12 +77,6 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
             </Link>
         </div>
         <div className="flex items-center gap-2">
-            <Button variant="outline" asChild>
-                <Link href="/aide">
-                    <Rocket className="mr-2 h-4 w-4" />
-                    AIDE
-                </Link>
-            </Button>
             <Button variant="outline" asChild>
                 <Link href="/dashboard">
                     <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -103,38 +89,27 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" disabled={isActionInProgress}>
+                <Button variant="outline" disabled={isGenerating}>
                   Actions <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                 <DropdownMenuItem onClick={() => onManualAction('testConnection')} disabled={isActionInProgress}>
-                  <Wifi className="mr-2 h-4 w-4" /> Test Firebase Connection
+                 <DropdownMenuItem onClick={() => onManualAction('testConnection')} disabled={isGenerating}>
+                  <Wifi className="mr-2 h-4 w-4" /> Test Connection
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/ota">
                     <Rocket className="mr-2 h-4 w-4" />
-                    <span>Go to OTA Update Page</span>
+                    <span>Go to OTA Update</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onManualAction('compile')} disabled={isActionInProgress}>
-                  <Cog className="mr-2 h-4 w-4" /> Compile Firmware
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onManualAction('upload')} disabled={isActionInProgress}>
-                  <UploadCloud className="mr-2 h-4 w-4" /> Upload to Docker
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onManualAction('verify')} disabled={isActionInProgress}>
-                  <ShieldCheck className="mr-2 h-4 w-4" /> Verify on Device
+                <DropdownMenuItem onClick={() => onManualAction('compile')} disabled={isGenerating}>
+                  <Cog className="mr-2 h-4 w-4" /> Manually Compile
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
         </div>
-      </div>
-      <div className="flex items-center gap-4">
-        <DeploymentPipeline status={pipelineStatus} />
-        <StatusIndicator isProcessing={isActionInProgress || isGenerating} statusMessage={currentStatus} />
-      </div>
     </header>
   );
 }

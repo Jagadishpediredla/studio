@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Bot, Code, Rocket } from 'lucide-react';
 
-export default function Home() {
+export default function HomePage() {
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col items-center justify-center p-8 text-center font-body">
       <div className="flex items-center gap-4 mb-4">
@@ -57,7 +57,6 @@ export default function Home() {
             fill="none"
             stroke="currentColor"
             strokeLinecap="round"
-
             strokeLinejoin="round"
             strokeWidth="16"
           />

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { StatusUpdate } from '@/lib/types';
 
-interface IntelligencePanelProps extends React.HTMLAttributes<HTMLDivElement> {
+interface IntelligencePanelProps {
   visualizerHtml: string;
   compilationLogs: StatusUpdate[];
 }
@@ -17,8 +17,6 @@ interface IntelligencePanelProps extends React.HTMLAttributes<HTMLDivElement> {
 export default function IntelligencePanel({
   visualizerHtml,
   compilationLogs,
-  className,
-  ...props
 }: IntelligencePanelProps) {
   const logsEndRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -63,17 +61,13 @@ export default function IntelligencePanel({
   }
 
   return (
-    <Card className={cn("flex flex-col", className)} {...props}>
-        <Tabs defaultValue="visualizer" className="flex-grow flex flex-col min-h-0">
-            <CardHeader>
-                <div className="flex items-center justify-between">
-                    <CardTitle className="font-headline flex items-center gap-2">
-                        <BrainCircuit className="h-6 w-6 text-primary" />
-                        Intelligence
-                    </CardTitle>
+    <Card className="flex flex-col h-full border-0 shadow-none rounded-none">
+        <Tabs defaultValue="logs" className="flex-grow flex flex-col min-h-0">
+            <CardHeader className="p-0">
+                <div className="flex items-center justify-between p-4 border-b">
                     <TabsList>
-                        <TabsTrigger value="visualizer">AI Visualizer</TabsTrigger>
-                        <TabsTrigger value="logs">Logs</TabsTrigger>
+                        <TabsTrigger value="logs"><Terminal className="mr-2"/>Logs</TabsTrigger>
+                        <TabsTrigger value="visualizer"><BrainCircuit className="mr-2"/>AI Visualizer</TabsTrigger>
                     </TabsList>
                 </div>
             </CardHeader>
@@ -91,6 +85,7 @@ export default function IntelligencePanel({
                <CardContent className="h-full p-0">
                 <ScrollArea className="h-full w-full">
                   <div className="p-4 font-code text-xs bg-black h-full">
+                    {compilationLogs.length === 0 && <div className="text-muted-foreground">&gt; Awaiting logs...</div>}
                     {compilationLogs.map((log, index) => (
                       <div key={index} className={cn("whitespace-pre-wrap leading-relaxed", getLogColor(log.type))}>
                         <span className="text-gray-500 mr-2">{new Date(log.timestamp).toLocaleTimeString()}</span>

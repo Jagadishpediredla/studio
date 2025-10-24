@@ -3,7 +3,7 @@
 
 import type * as React from 'react';
 import { useEffect, useRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Wand2, Loader, Bot, User, MessageSquare } from "lucide-react";
@@ -12,7 +12,7 @@ import type { ChatMessage } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
 
-interface AiControlsProps extends React.HTMLAttributes<HTMLDivElement> {
+interface AiControlsProps {
   prompt: string;
   setPrompt: (prompt: string) => void;
   onSendMessage: () => void;
@@ -20,7 +20,7 @@ interface AiControlsProps extends React.HTMLAttributes<HTMLDivElement> {
   chatHistory: ChatMessage[];
 }
 
-export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerating, chatHistory, className, ...props }: AiControlsProps) {
+export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerating, chatHistory }: AiControlsProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,15 +40,14 @@ export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerat
   };
 
   return (
-    <Card className={cn("flex flex-col", className)} {...props}>
-      <CardHeader>
-        <CardTitle className="font-headline flex items-center gap-2">
-          <MessageSquare className="h-6 w-6 text-primary" />
+    <Card className="flex flex-col h-full border-0 shadow-none rounded-none">
+      <CardHeader className="p-4 border-b">
+        <CardTitle className="font-headline flex items-center gap-2 text-base">
+          <MessageSquare className="h-5 w-5 text-primary" />
           AI Chat
         </CardTitle>
-        <CardDescription>Talk to the AI to build and modify your code.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-4 min-h-0">
+      <CardContent className="flex-grow flex flex-col gap-4 min-h-0 p-4">
         <ScrollArea className="flex-grow h-full pr-4 -mr-4">
             <div className="space-y-6" ref={scrollAreaRef as any}>
             {chatHistory.map((msg, index) => (
@@ -59,7 +58,7 @@ export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerat
                     </Avatar>
                 )}
                 <div className={cn(
-                    "rounded-lg p-3 max-w-[80%] text-sm",
+                    "rounded-lg p-3 max-w-[85%] text-sm",
                     msg.role === 'assistant' ? 'bg-muted' : 'bg-primary text-primary-foreground'
                 )}>
                     <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -76,7 +75,7 @@ export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerat
         <div className="relative">
             <Textarea
             placeholder='e.g., "Make the LED blink twice as fast."'
-            className="min-h-[80px] text-base pr-20"
+            className="min-h-[60px] text-sm pr-20"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyPress={handleKeyPress}
@@ -84,8 +83,8 @@ export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerat
             />
             <Button 
                 onClick={onSendMessage} 
-                disabled={isGenerating} 
-                className="absolute bottom-3 right-3"
+                disabled={isGenerating || !prompt} 
+                className="absolute bottom-2.5 right-2.5"
                 size="icon"
             >
             {isGenerating ? (

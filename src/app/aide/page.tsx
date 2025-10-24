@@ -11,51 +11,46 @@ import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStat
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
 
-
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import AppHeader from '@/components/app-header';
 import AiControls from '@/components/ai-controls';
 import CodeEditorPanel from '@/components/code-editor-panel';
 import IntelligencePanel from '@/components/intelligence-panel';
+import ProjectExplorer from '@/components/project-explorer';
 import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
+import DeploymentPipeline from '@/components/deployment-pipeline';
+import StatusIndicator from '@/components/status-indicator';
 
-const initialCode = `// Use the AI Controls to generate code for your ESP32
+const initialCode = `// Welcome to your AIDE Project!
+// Use the AI Chat to start building.
 void setup() {
-  // put your setup code here, to run once:
+  pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(115200);
-  Serial.println("Hello, ESP32!");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  delay(1000);
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(500);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(500);
 }`;
 
 const initialVisualizerHtml = `
 <body class="bg-gray-900 text-gray-100 flex items-center justify-center h-full font-sans">
   <div class="text-center p-8 rounded-lg bg-gray-800 shadow-xl">
-    <h1 class="text-3xl font-bold text-blue-400 mb-4">Initial Sketch</h1>
-    <p class="text-lg">This is a basic Arduino sketch.</p>
-    <div class="mt-6 text-left space-y-4">
-        <div class="p-4 bg-gray-700 rounded-lg">
-            <h2 class="font-semibold text-xl text-green-400">setup()</h2>
-            <p>Runs once to initialize serial communication at 115200 bps.</p>
-        </div>
-        <div class="p-4 bg-gray-700 rounded-lg">
-            <h2 class="font-semibold text-xl text-yellow-400">loop()</h2>
-            <p>Runs repeatedly, pausing for 1 second in each iteration.</p>
-        </div>
-    </div>
-    <p class="mt-8 text-sm text-gray-400">Use the AI controls to generate more complex code.</p>
+    <h1 class="text-3xl font-bold text-blue-400 mb-4">AIDE Project Initialized</h1>
+    <p class="text-lg">Your agentic IDE is ready. Start by chatting with the AI.</p>
   </div>
 </body>
 `;
 
 export default function AidePage() {
-  const [prompt, setPrompt] = useState<string>('Blink an LED on pin 13');
+  const [prompt, setPrompt] = useState<string>('Make the LED blink twice as fast');
   const [code, setCode] = useState<string>(initialCode);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
-    { role: 'assistant', content: "Hello! I'm your AI pair programmer. How can I help you with your ESP32 project today?" }
+    { role: 'assistant', content: "Hello! I'm your AI pair programmer. I have context of this project. How can we improve it?" }
   ]);
   const [boardInfo, setBoardInfo] = useState<BoardInfo>({ fqbn: 'esp32:esp32:esp32', libraries: [] });
   const [visualizerHtml, setVisualizerHtml] = useState<string>(initialVisualizerHtml);
@@ -70,11 +65,10 @@ export default function AidePage() {
     verify: 'pending',
   });
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState('System Idle');
+  const [currentStatus, setCurrentStatus] = useState('Awaiting instructions...');
   const [compilationLogs, setCompilationLogs] = useState<StatusUpdate[]>([]);
   const { toast } = useToast();
   
-  // Refs for managing state in Firebase listeners
   const jobStateRef = useRef({
     requestId: '',
     logId: '',
@@ -97,7 +91,6 @@ export default function AidePage() {
             type,
             timestamp: new Date().toISOString(),
         };
-        // Prevent duplicate consecutive messages
         if (prev.length > 0 && prev[prev.length - 1].message === message) {
             return prev;
         }
@@ -118,7 +111,6 @@ export default function AidePage() {
     }
   };
   
-  // Cleanup on unmount
   useEffect(() => {
     return () => cleanupListeners();
   }, []);
@@ -208,7 +200,6 @@ export default function AidePage() {
       const firebaseLogMsg = `[FIREBASE] Wrote to /requests/${desktopId}/${result.requestId}`;
       addLog(firebaseLogMsg, 'success');
       addLog(`[CLOUD] Job submitted with ID: ${result.requestId}. Waiting for acknowledgment...`);
-      // We will write the 'request_submitted' log event AFTER we get the logId
       return result.requestId;
     } else {
       updatePipeline('compile', 'failed');
@@ -234,7 +225,6 @@ export default function AidePage() {
         const status: FirebaseStatusUpdate = snapshot.val();
         if (!status) return;
 
-        // As per demo, the first status update clears the timeout
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = undefined;
@@ -246,7 +236,6 @@ export default function AidePage() {
             const ackMsg = `[CLOUD] Desktop client acknowledged. Log ID: ${status.logId}`;
             addLog(ackMsg);
             
-            // Per docs: Now that we have logId, write the client-side events
             await writeClientLog(status.logId, 'request_submitted', 'Compilation request submitted by client', {
                 codeLength: code.length,
                 board: boardInfo.fqbn,
@@ -322,7 +311,6 @@ export default function AidePage() {
 
     timeoutRef.current = setTimeout(() => {
         cleanupListeners();
-        // Only fail if it's still in a processing state
         setPipelineStatus(prev => {
             if (prev.compile === 'processing' || prev.compile === 'pending') {
                 const errorMsg = 'Job timed out after 3 minutes. The desktop client did not respond or complete in time.';
@@ -338,7 +326,7 @@ export default function AidePage() {
             }
             return prev;
         });
-    }, 180000); // 180 seconds = 3 minutes
+    }, 180000);
   };
   
   const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile' | 'serverCheck'>): Promise<boolean> => {
@@ -349,7 +337,6 @@ export default function AidePage() {
       setTimeout(() => {
         updatePipeline(step, 'completed');
         addLog(`[CLOUD] Simulated ${step} step complete.`, 'success');
-        toast({ title: 'Step Complete', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step is simulated.` });
         resolve(true);
       }, duration);
     });
@@ -372,26 +359,26 @@ export default function AidePage() {
     const historyId = crypto.randomUUID();
     jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: '', historyId };
     
-    addLog('[CLOUD] Starting pipeline...');
+    addLog('[AIDE] Starting pipeline...');
     
     updatePipeline('serverCheck', 'processing');
-    addLog('[CLOUD] Checking for online desktop clients...');
+    addLog('[AIDE] Checking for online desktop clients...');
     const health = await findActiveDesktopClient();
 
     if (!health.success || !health.clientId) {
       updatePipeline('serverCheck', 'failed');
       const errorMessage = health.error || 'No online desktop clients found.';
-      addLog(`[CLOUD] Error: ${errorMessage}`, 'error');
+      addLog(`[AIDE] Error: ${errorMessage}`, 'error');
       toast({ title: 'Health Check Failed', description: errorMessage, variant: 'destructive', duration: 20000 });
       setIsGenerating(false);
       setChatHistory(prev => [...prev, { role: 'assistant', content: `I couldn't connect to a desktop client. ${errorMessage}` }]);
       return;
     }
     updatePipeline('serverCheck', 'completed');
-    addLog(`[FIREBASE] Found online client: ${health.clientId}.`, 'success');
+    addLog(`[AIDE] Found online client: ${health.clientId}.`, 'success');
 
     updatePipeline('codeGen', 'processing');
-    addLog('[CLOUD] Thinking... AI is analyzing your request and the current code.');
+    addLog('[AIDE] Thinking... AI is analyzing your request and the current code.');
 
     try {
       const fullPrompt = `You are an expert ESP32 Arduino pair programmer. Your task is to intelligently modify the user's existing code based on their latest request in our conversation.
@@ -418,7 +405,7 @@ Generate the new, complete code block now.
       setChatHistory(prev => [...prev, { role: 'assistant', content: "OK, I've updated the code based on your request. I'm starting the build and deploy pipeline now." }]);
       updatePipeline('codeGen', 'completed');
       
-      addLog('[CLOUD] Code generation complete. Generating AI summary and visualization...', 'success');
+      addLog('[AIDE] Code generation complete. Generating AI summary and visualization...', 'success');
       
       const aiEnrichmentPromise = (async () => {
         let visualizerHtmlResult = '<body>Visualizer failed to generate.</body>';
@@ -427,7 +414,7 @@ Generate the new, complete code block now.
           const { html } = await generateVisualExplanation({ code: newCode });
           visualizerHtmlResult = html;
           setVisualizerHtml(visualizerHtmlResult);
-          addLog('[CLOUD] AI Visualizer updated.', 'success');
+          addLog('[AIDE] AI Visualizer updated.', 'success');
         } catch (visError: any) {
           addLog(`[AI] Visualizer failed: ${visError.message}`, 'error');
           console.error("Visualizer generation failed:", visError);
@@ -436,7 +423,7 @@ Generate the new, complete code block now.
         try {
            const { explanation } = await analyzeCodeForExplanation({ code: newCode });
            explanationResult = explanation;
-           addLog('[CLOUD] AI summary generated.', 'success');
+           addLog('[AIDE] AI summary generated.', 'success');
         } catch (expError: any) {
           addLog(`[AI] Summary failed: ${expError.message}`, 'error');
           console.error("Explanation generation failed:", expError);
@@ -473,21 +460,11 @@ Generate the new, complete code block now.
       if (pipelineStatus.codeGen !== 'completed') {
         updatePipeline('codeGen', 'failed');
       }
-      addLog(`[CLOUD] Pipeline Failed: ${message}`, 'error');
+      addLog(`[AIDE] Pipeline Failed: ${message}`, 'error');
       setChatHistory(prev => [...prev, { role: 'assistant', content: `I ran into an error: ${message}` }]);
       toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });
       setIsGenerating(false);
       cleanupListeners();
-    }
-  };
-  
-  const handleTestConnection = async () => {
-    toast({ title: 'Testing Connection', description: 'Checking connection to Firebase and desktop bridge...' });
-    const health = await findActiveDesktopClient();
-    if (health.success && health.clientId) {
-      toast({ title: 'Connection Successful', description: `Successfully connected to desktop client: ${health.clientId}` });
-    } else {
-      toast({ title: 'Connection Failed', description: health.error || 'Could not connect to desktop client.', variant: 'destructive' });
     }
   };
 
@@ -512,7 +489,12 @@ Generate the new, complete code block now.
         setIsGenerating(false);
       }
     } else if (step === 'testConnection') {
-      await handleTestConnection();
+      const health = await findActiveDesktopClient();
+      if (health.success && health.clientId) {
+        toast({ title: 'Connection Successful', description: `Successfully connected to desktop client: ${health.clientId}` });
+      } else {
+        toast({ title: 'Connection Failed', description: health.error || 'Could not connect to desktop client.', variant: 'destructive' });
+      }
       setIsGenerating(false);
     } else if (step !== 'serverCheck') {
       await runPlaceholderStep(step);
@@ -544,54 +526,73 @@ Generate the new, complete code block now.
 
   const handleDownloadBinary = async (buildId: string) => {
     if (!buildId) return;
-    setIsGenerating(true); // Show a loading state
+    setIsGenerating(true); 
     await handleFirmwareDownload(buildId);
     setIsGenerating(false);
   }
 
   return (
-    <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
-      <main className="grid flex-grow grid-cols-1 lg:grid-cols-[380px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4 overflow-hidden">
+    <TooltipProvider>
+      <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
         <AppHeader 
-          pipelineStatus={pipelineStatus}
           onManualAction={handleManualAction}
           onShowHistory={() => setIsHistoryOpen(true)}
           isGenerating={isGenerating}
-          currentStatus={currentStatus}
-          className="col-span-1 lg:col-span-3" 
         />
-        
-        <AiControls 
-          prompt={prompt} 
-          setPrompt={setPrompt} 
-          onSendMessage={handleSendMessage} 
-          isGenerating={isGenerating} 
-          chatHistory={chatHistory}
-          className="row-start-2 flex h-full flex-col gap-4 overflow-hidden"
+        <main className="flex-grow flex min-h-0 border-t">
+            <ResizablePanelGroup direction="horizontal" className="flex-grow">
+              <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
+                  <ProjectExplorer />
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel>
+                  <ResizablePanelGroup direction="vertical">
+                      <ResizablePanel defaultSize={70}>
+                          <CodeEditorPanel
+                            code={code}
+                            onCodeChange={setCode}
+                            boardInfo={boardInfo}
+                          />
+                      </ResizablePanel>
+                      <ResizableHandle withHandle />
+                      <ResizablePanel defaultSize={30} minSize={20}>
+                          <ResizablePanelGroup direction="horizontal">
+                              <ResizablePanel defaultSize={50}>
+                                  <AiControls
+                                    prompt={prompt}
+                                    setPrompt={setPrompt}
+                                    onSendMessage={handleSendMessage}
+                                    isGenerating={isGenerating}
+                                    chatHistory={chatHistory}
+                                  />
+                              </ResizablePanel>
+                              <ResizableHandle withHandle />
+                              <ResizablePanel defaultSize={50}>
+                                  <IntelligencePanel
+                                    visualizerHtml={visualizerHtml}
+                                    compilationLogs={compilationLogs}
+                                  />
+                              </ResizablePanel>
+                          </ResizablePanelGroup>
+                      </ResizablePanel>
+                  </ResizablePanelGroup>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+        </main>
+        <footer className="border-t px-4 py-1 flex items-center gap-4 text-xs">
+            <DeploymentPipeline status={pipelineStatus} />
+            <StatusIndicator isProcessing={isGenerating} statusMessage={currentStatus} />
+        </footer>
+        <HistorySheet 
+          isOpen={isHistoryOpen}
+          onOpenChange={setIsHistoryOpen}
+          history={history}
+          onRestore={handleRestoreFromHistory}
+          onDownloadCode={handleDownloadCode}
+          onDownloadBinary={handleDownloadBinary}
+          isGenerating={isGenerating}
         />
-          
-        <CodeEditorPanel
-          className="row-start-2 flex flex-col h-full min-h-0"
-          code={code}
-          onCodeChange={setCode}
-          boardInfo={boardInfo}
-        />
-        
-        <IntelligencePanel
-          className="row-start-2 flex flex-col h-full min-h-0"
-          visualizerHtml={visualizerHtml}
-          compilationLogs={compilationLogs}
-        />
-      </main>
-      <HistorySheet 
-        isOpen={isHistoryOpen}
-        onOpenChange={setIsHistoryOpen}
-        history={history}
-        onRestore={handleRestoreFromHistory}
-        onDownloadCode={handleDownloadCode}
-        onDownloadBinary={handleDownloadBinary}
-        isGenerating={isGenerating}
-      />
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
