@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
 import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, LayoutDashboard, Cpu } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { ScrollArea } from './ui/scroll-area';
 import { ESP32Svg } from './esp32-svg';
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -101,10 +100,8 @@ export default function AppHeader({ onManualAction, onShowHistory, isGenerating,
                 <DialogHeader>
                   <DialogTitle className="font-headline">ESP32 Pinout - Detailed View</DialogTitle>
                 </DialogHeader>
-                <div className="flex-grow min-h-0">
-                  <ScrollArea className="h-full w-full">
-                      <ESP32Svg className="w-full h-auto" />
-                  </ScrollArea>
+                <div className="flex-grow min-h-0 flex items-center justify-center">
+                    <ESP32Svg className="max-w-full max-h-full object-contain" />
                 </div>
               </DialogContent>
             </Dialog>
