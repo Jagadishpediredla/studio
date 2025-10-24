@@ -3,10 +3,10 @@
 
 import * as React from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { aideChat } from '@/ai/flows/aide-chat-flow.ts';
 import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getBuildInfo, getBinary, getProject, updateProject } from '@/app/actions';
-import type { HistoryItem, BoardInfo, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo, Project } from '@/lib/types';
+import type { HistoryItem, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo, Project } from '@/lib/types';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
 import { type ToolRequestPart } from 'genkit';
@@ -22,7 +22,6 @@ import CodeEditorPanel from '@/components/code-editor-panel';
 import IntelligencePanel from '@/components/intelligence-panel';
 import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2 } from 'lucide-react';
 
 export default function AidePage() {
@@ -34,8 +33,9 @@ export default function AidePage() {
   const [isLoadingProject, setIsLoadingProject] = useState(true);
   
   const [prompt, setPrompt] = useState<string>('');
-  const [visualizerHtml, setVisualizerHtml] = useState<string>('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isLogsOpen, setIsLogsOpen] = useState(false);
+  const [isVisualizerOpen, setIsVisualizerOpen] = useState(false);
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [compilationLogs, setCompilationLogs] = useState<StatusUpdate[]>([]);
@@ -56,6 +56,7 @@ export default function AidePage() {
   const chatHistory = project?.chatHistory ?? [];
   const boardInfo = project?.boardInfo ?? { fqbn: 'esp32:esp32:esp32', libraries: [] };
   const versionHistory = project?.versionHistory ?? [];
+  const visualizerHtml = project?.versionHistory?.[0]?.visualizerHtml ?? '';
 
 
   const cleanupListeners = useCallback(() => {
@@ -80,9 +81,6 @@ export default function AidePage() {
           versionHistory: (result.project.versionHistory || []).map(v => ({...v, timestamp: new Date(v.timestamp)}))
         }
         setProject(loadedProject as Project);
-        if (loadedProject.versionHistory.length > 0) {
-          setVisualizerHtml(loadedProject.versionHistory[0].visualizerHtml || '');
-        }
       } else {
         toast({ title: 'Error', description: `Could not load project: ${result.error}`, variant: 'destructive' });
         router.push('/');
@@ -98,22 +96,17 @@ export default function AidePage() {
   const updateProjectData = useCallback(async (updates: Partial<Omit<Project, 'id'>>) => {
       if (!project) return;
       
-      const updatedProject = { ...project, ...updates };
+      const updatedProject = { ...project, ...updates, updatedAt: new Date().toISOString() };
       setProject(updatedProject);
       
-      // Debounce updates to avoid hammering the database
-      const handler = setTimeout(async () => {
-        const result = await updateProject(projectId, updates);
-        if (!result.success) {
-            toast({
-                title: "Save Error",
-                description: `Failed to save project changes: ${result.error}`,
-                variant: 'destructive'
-            })
-        }
-      }, 500);
-
-      return () => clearTimeout(handler);
+      const result = await updateProject(projectId, updates);
+      if (!result.success) {
+          toast({
+              title: "Save Error",
+              description: `Failed to save project changes: ${result.error}`,
+              variant: 'destructive'
+          })
+      }
       
   }, [project, projectId, toast]);
   
@@ -149,7 +142,6 @@ export default function AidePage() {
     let primaryFile: { filename: string, downloadUrl?: string } | null = null;
     let fileType: 'bin' | 'hex' | 'elf' | undefined;
 
-    // Prefer .bin, then .hex, then .elf
     if (build.files?.bin) {
         primaryFile = build.files.bin;
         fileType = 'bin';
@@ -251,7 +243,6 @@ export default function AidePage() {
     }
   };
 
-  // Using useCallback for handleSendMessage to stabilize its reference
   const handleSendMessage = useCallback(async (overridePrompt?: string) => {
     const currentPrompt = overridePrompt || prompt;
     if (!currentPrompt.trim() || !project) return;
@@ -283,16 +274,11 @@ export default function AidePage() {
           if (part.text) {
             responseText += part.text;
           } else if (part.toolRequest) {
-            // NOTE: We are intentionally not awaiting executeTool here
-            // because it has its own state management for compilation.
-            // Awaiting it would block the UI from updating with the initial AI response.
             executeTool(part, newChatHistory); 
           }
         }
       }
       
-      // Only add a new assistant message if there's text content.
-      // Tool responses will add their own messages.
       if (responseText) {
         newChatHistory = [...newChatHistory, { role: 'assistant', content: responseText }];
         updateProjectData({ chatHistory: newChatHistory });
@@ -309,12 +295,12 @@ export default function AidePage() {
           setIsGenerating(false);
         }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project, prompt, chatHistory, code, updateProjectData, toast]);
 
 
   const monitorCompilationStatus = useCallback((requestId: string, submitTime: number) => {
     cleanupListeners();
+    setIsLogsOpen(true);
 
     const statusRef = ref(database, `status/${requestId}`);
     addLog(`[CLOUD] Listening to Firebase: /status/${requestId}`);
@@ -416,13 +402,9 @@ export default function AidePage() {
             const { code: newCode, board: newBoard, libraries: newLibraries } = input;
             const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
 
-            // Update local state immediately for responsiveness
-            setProject(p => p ? { ...p, code: newCode, boardInfo: newBoardInfo } : null);
-
             addLog('[AIDE] Code generation complete. Generating AI summary and visualization...', 'success');
             toast({ title: 'Success', description: 'New code generated.' });
 
-            // Fire-and-forget the enrichment and saving
             Promise.all([
                 generateVisualExplanation({ code: newCode }),
                 analyzeCodeForExplanation({ code: newCode }),
@@ -430,9 +412,6 @@ export default function AidePage() {
                 const visualizerHtmlResult = visualResult.html || '<body>Visualizer failed to generate.</body>';
                 const explanationResultText = explanationResult.explanation || 'AI summary failed to generate.';
                 
-                setVisualizerHtml(visualizerHtmlResult);
-                addLog('[AIDE] AI Visualizer and Summary updated.', 'success');
-
                 const currentHistoryItem: HistoryItem = { 
                     id: historyId, 
                     code: newCode, 
@@ -448,6 +427,8 @@ export default function AidePage() {
                     boardInfo: newBoardInfo,
                     versionHistory: [currentHistoryItem, ...(project?.versionHistory || [])],
                 });
+                addLog('[AIDE] AI Visualizer and Summary updated.', 'success');
+
             }).catch(err => {
                 console.error("Error in AI enrichment:", err);
                 addLog(`[AI] Enrichment failed: ${err.message}`, 'error');
@@ -458,6 +439,7 @@ export default function AidePage() {
         compileCode: async () => {
             setCompilationLogs([]);
             addLog('[AIDE] Starting compilation pipeline...');
+            setIsLogsOpen(true);
             
             addLog('[AIDE] Checking for online desktop clients...');
             const health = await findActiveDesktopClient();
@@ -488,7 +470,10 @@ export default function AidePage() {
         },
         visualizeCode: async (input) => {
             const { html } = await generateVisualExplanation(input);
-            setVisualizerHtml(html);
+            updateProjectData({
+              versionHistory: [{...versionHistory[0], visualizerHtml: html}, ...versionHistory.slice(1)]
+            });
+            setIsVisualizerOpen(true);
             return { html };
         },
         runTechnicalAnalysis: async (input) => {
@@ -509,7 +494,7 @@ export default function AidePage() {
             } else if (toolName === 'analyzeCode') {
                  assistantMessageContent = toolResponse.explanation;
             } else if (toolName === 'visualizeCode') {
-                 assistantMessageContent = `I've generated a new visual explanation of the code. You can see it in the "Visualizer" tab.`;
+                 assistantMessageContent = `I've generated a new visual explanation of the code. You can see it by clicking the "Visualizer" icon in the navigation rail.`;
             } else if (toolName === 'runTechnicalAnalysis') {
                  assistantMessageContent = `Here is the technical analysis report:\n\n${toolResponse.report}`;
             } else {
@@ -535,9 +520,17 @@ export default function AidePage() {
   };
 
 
-  const handleManualAction = async (action: 'compile' | 'testConnection' | 'showHistory') => {
+  const handleManualAction = async (action: 'compile' | 'showHistory' | 'showLogs' | 'showVisualizer') => {
     if (action === 'showHistory') {
         setIsHistoryOpen(true);
+        return;
+    }
+    if (action === 'showLogs') {
+        setIsLogsOpen(true);
+        return;
+    }
+    if (action === 'showVisualizer') {
+        setIsVisualizerOpen(true);
         return;
     }
     
@@ -547,14 +540,6 @@ export default function AidePage() {
 
     if (action === 'compile') {
         await executeTool({ toolRequest: { name: 'compileCode', input: {} } } as any, chatHistory);
-    } else if (action === 'testConnection') {
-      const health = await findActiveDesktopClient();
-      if (health.success && health.clientId) {
-        toast({ title: 'Connection Successful', description: `Successfully connected to desktop client: ${health.clientId}` });
-      } else {
-        toast({ title: 'Connection Failed', description: health.error || 'Could not connect to desktop client.', variant: 'destructive' });
-      }
-      setIsGenerating(false);
     } else {
         setIsGenerating(false);
     }
@@ -565,9 +550,9 @@ export default function AidePage() {
     updateProjectData({ 
         code: item.code, 
         boardInfo: item.board,
-        chatHistory: newChatHistory
+        chatHistory: newChatHistory,
+        versionHistory: [item, ...versionHistory.filter(v => v.id !== item.id)]
     });
-    setVisualizerHtml(item.visualizerHtml);
     setIsHistoryOpen(false);
     toast({ title: 'Restored', description: `Restored code from ${item.timestamp.toLocaleTimeString()}` });
   };
@@ -610,37 +595,26 @@ export default function AidePage() {
   return (
     <TooltipProvider>
       <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
-        <NavRail onShowHistory={() => setIsHistoryOpen(true)} />
+        <NavRail onManualAction={handleManualAction} />
         <main className="flex-grow flex min-h-0">
            <ResizablePanelGroup direction="horizontal">
             <ResizablePanel defaultSize={50} minSize={30}>
-                <ResizablePanelGroup direction="vertical">
-                    <ResizablePanel defaultSize={60} minSize={30}>
-                         <AiControls
-                            projectName={project.name}
-                            prompt={prompt}
-                            setPrompt={setPrompt}
-                            onSendMessage={handleSendMessage}
-                            isGenerating={isGenerating}
-                            chatHistory={chatHistory}
-                            onManualAction={handleManualAction}
-                        />
-                    </ResizablePanel>
-                    <ResizableHandle withHandle />
-                    <ResizablePanel defaultSize={40} minSize={20}>
-                       <CodeEditorPanel
-                            code={code}
-                            onCodeChange={handleCodeChange}
-                            boardInfo={boardInfo}
-                        />
-                    </ResizablePanel>
-                </ResizablePanelGroup>
+                <AiControls
+                    projectName={project.name}
+                    prompt={prompt}
+                    setPrompt={setPrompt}
+                    onSendMessage={handleSendMessage}
+                    isGenerating={isGenerating}
+                    chatHistory={chatHistory}
+                    onManualAction={(action) => handleManualAction(action as 'compile')}
+                />
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={50} minSize={30}>
-               <IntelligencePanel
-                    visualizerHtml={visualizerHtml}
-                    compilationLogs={compilationLogs}
+               <CodeEditorPanel
+                    code={code}
+                    onCodeChange={handleCodeChange}
+                    boardInfo={boardInfo}
                 />
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -655,9 +629,24 @@ export default function AidePage() {
           onDownloadBinary={handleDownloadBinary}
           isGenerating={isGenerating}
         />
+        
+        <IntelligencePanel
+            isOpen={isLogsOpen}
+            onOpenChange={setIsLogsOpen}
+            defaultTab="logs"
+            visualizerHtml={visualizerHtml}
+            compilationLogs={compilationLogs}
+        />
+
+        <IntelligencePanel
+            isOpen={isVisualizerOpen}
+            onOpenChange={setIsVisualizerOpen}
+            defaultTab="visualizer"
+            visualizerHtml={visualizerHtml}
+            compilationLogs={compilationLogs}
+        />
+
       </div>
     </TooltipProvider>
   );
 }
-
-    

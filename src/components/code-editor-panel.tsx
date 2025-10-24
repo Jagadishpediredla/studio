@@ -35,15 +35,13 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo }: CodeE
   const editorRef = useRef<IAceEditor | null>(null);
 
   useEffect(() => {
-    // On mount or when code changes, force the editor to resize.
-    // This fixes the single-line rendering bug on large screens.
     if (editorRef.current) {
       editorRef.current.editor.resize();
     }
   }, [code]);
 
   return (
-    <div className="flex flex-col h-full bg-card border-t">
+    <div className="flex flex-col h-full bg-card border-l">
       <header className="p-3 border-b flex items-center justify-between">
         <h2 className="font-headline text-base">Code</h2>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -78,7 +76,7 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo }: CodeE
               enableSnippets: true,
               showLineNumbers: true,
               tabSize: 2,
-              useWorker: true, // This is important for performance and some features
+              useWorker: true,
             }}
             fontSize={16}
             showPrintMargin={false}
@@ -92,5 +90,3 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo }: CodeE
     </div>
   );
 }
-
-    

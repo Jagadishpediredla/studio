@@ -3,27 +3,23 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Home, LayoutDashboard, Settings, History, Bot } from "lucide-react";
+import { Home, LayoutDashboard, Settings, History, Bot, Terminal, BrainCircuit } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavRailProps {
-    onShowHistory: () => void;
+    onManualAction: (action: 'showHistory' | 'showLogs' | 'showVisualizer') => void;
 }
 
 const navItems = [
     { href: "/", icon: Home, label: "Projects" },
     { href: "/dashboard", icon: LayoutDashboard, label: "Job Dashboard" },
     { action: "showHistory", icon: History, label: "Version History" },
+    { action: "showLogs", icon: Terminal, label: "Logs" },
+    { action: "showVisualizer", icon: BrainCircuit, label: "Visualizer" },
     { href: "/settings", icon: Settings, label: "AI Settings" },
 ];
 
-export default function NavRail({ onShowHistory }: NavRailProps) {
-    
-    const handleAction = (action: string) => {
-        if (action === 'showHistory') {
-            onShowHistory();
-        }
-    };
+export default function NavRail({ onManualAction }: NavRailProps) {
     
     return (
         <aside className="h-full bg-card border-r flex flex-col items-center justify-between p-2">
@@ -42,7 +38,7 @@ export default function NavRail({ onShowHistory }: NavRailProps) {
                                         <span className="sr-only">{item.label}</span>
                                     </Link>
                                 ) : (
-                                    <button onClick={() => handleAction(item.action!)} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground hover:bg-muted">
+                                    <button onClick={() => onManualAction(item.action as any)} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground hover:bg-muted">
                                         <item.icon className="h-5 w-5" />
                                         <span className="sr-only">{item.label}</span>
                                     </button>
@@ -54,7 +50,6 @@ export default function NavRail({ onShowHistory }: NavRailProps) {
                     </nav>
                  </TooltipProvider>
             </div>
-            {/* Can add avatar/user menu here in the future */}
         </aside>
     );
 }

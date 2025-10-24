@@ -72,6 +72,16 @@ export default function AiControls({ projectName, prompt, setPrompt, onSendMessa
                 )}
                 </div>
             ))}
+             {isGenerating && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user' && (
+                <div className="flex items-start gap-3">
+                    <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
+                        <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
+                    </Avatar>
+                    <div className="rounded-lg p-3 max-w-[85%] text-sm bg-muted flex items-center">
+                        <Loader className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                </div>
+            )}
             </div>
         </ScrollArea>
         <div className="relative">
