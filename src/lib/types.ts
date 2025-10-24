@@ -63,10 +63,21 @@ export interface BuildInfo {
     requestId: string;
     board: string;
     status: 'completed' | 'failed';
+    // NEW: Indicates storage type
+    storage?: 'github' | 'firebase';
+    github?: {
+        repo: string;
+        releaseId: number;
+        releaseUrl: string;
+        releaseTag: string;
+    };
     files: Record<string, {
         filename: string;
         size: number;
         checksum: string;
+        // NEW: URL for GitHub downloads
+        githubUrl?: string;
+        downloadUrl?: string;
     }>;
 }
 

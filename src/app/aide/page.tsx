@@ -7,7 +7,7 @@ import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
 import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
 import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getBuildInfo, getBinary } from '@/app/actions';
-import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStatusUpdate, StatusUpdate, ChatMessage } from '@/lib/types';
+import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo } from '@/lib/types';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
 
@@ -126,46 +126,69 @@ export default function AidePage() {
       toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
       return { success: false };
     }
-
-    const availableFiles = buildInfoResult.build.files;
-    let fileType: 'hex' | 'bin' | 'elf' | undefined;
-    if (availableFiles.hex) fileType = 'hex';
-    else if (availableFiles.bin) fileType = 'bin';
-    else if (availableFiles.elf) fileType = 'elf';
     
-    if (!fileType) {
-        const errorMsg = `Download Failed: No downloadable files (.hex, .bin, .elf) found in build metadata.`;
+    const build: BuildInfo = buildInfoResult.build;
+
+    // Determine the primary file to download (.bin or .hex)
+    let primaryFile: { filename: string, downloadUrl?: string } | null = null;
+    let fileType: 'bin' | 'hex' | 'elf' | undefined;
+
+    if (build.files?.bin) {
+        primaryFile = build.files.bin;
+        fileType = 'bin';
+    } else if (build.files?.hex) {
+        primaryFile = build.files.hex;
+        fileType = 'hex';
+    } else if (build.files?.elf) {
+        primaryFile = build.files.elf;
+        fileType = 'elf';
+    }
+
+    if (!primaryFile || !fileType) {
+        const errorMsg = `Download Failed: No downloadable files (.bin, .hex) found in build metadata.`;
         addLog(`[CLOUD] ${errorMsg}`, 'error');
         toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
         return { success: false };
     }
-
-    addLog(`[CLOUD] Downloading file type: ${fileType}`);
-    const result = await getBinary(buildId, fileType);
-
-    if (!result.success || !result.binary) {
-      const errorMsg = `Download Failed: ${result.error || 'No binary data found.'}`;
-      addLog(`[CLOUD] ${errorMsg}`, 'error');
-      toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
-      return { success: false };
-    }
     
-    const byteCharacters = atob(result.binary);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    const filename = primaryFile.filename;
+
+    // New GitHub Download Logic
+    if (build.storage === 'github' && primaryFile.downloadUrl) {
+        addLog(`[GITHUB] Downloading from GitHub: ${filename}`);
+        const a = document.createElement('a');
+        a.href = primaryFile.downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    } 
+    // Legacy Firebase Download Logic
+    else {
+        addLog(`[FIREBASE] Downloading from Firebase: ${filename}`);
+        const result = await getBinary(buildId, fileType);
+        if (!result.success || !result.binary) {
+          const errorMsg = `Download Failed: ${result.error || 'No binary data found.'}`;
+          addLog(`[CLOUD] ${errorMsg}`, 'error');
+          toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
+          return { success: false };
+        }
+        const byteCharacters = atob(result.binary);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const filename = result.filename || `firmware-${new Date().getTime()}.${fileType}`;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
 
     const successMsg = `Firmware "${filename}" downloaded successfully.`;
     addLog(`[CLOUD] ${successMsg}`, 'success');
