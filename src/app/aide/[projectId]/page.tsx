@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { aideChat } from '@/ai/flows/aide-chat-flow.ts';
 import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getBuildInfo, getBinary, getProject, updateProject } from '@/app/actions';
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo, Project } from '@/lib/types';
@@ -26,8 +26,9 @@ import DeploymentPipeline from '@/components/deployment-pipeline';
 import StatusIndicator from '@/components/status-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export default function AidePage({ params }: { params: { projectId: string } }) {
-  const { projectId } = params;
+export default function AidePage() {
+  const params = useParams();
+  const projectId = params.projectId as string;
   const router = useRouter();
 
   const [project, setProject] = useState<Project | null>(null);
@@ -691,3 +692,5 @@ export default function AidePage({ params }: { params: { projectId: string } }) 
     </TooltipProvider>
   );
 }
+
+    
