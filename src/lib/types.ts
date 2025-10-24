@@ -1,7 +1,5 @@
 
 
-
-
 export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
 
 export type PipelineStatus = {
@@ -153,4 +151,15 @@ export interface CompilationJob {
   progress?: number;
   message: string;
   timestamp: string; // ISO 8601 string
+}
+
+// New Project type for project-based workflow
+export interface Project {
+  id: string;
+  name: string;
+  createdAt: string; // ISO string
+  code: string;
+  chatHistory: ChatMessage[];
+  versionHistory: HistoryItem[];
+  boardInfo: BoardInfo;
 }

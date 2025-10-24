@@ -2,13 +2,13 @@
 "use client";
 
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { UploadCloud, Wifi, HardDrive, Cpu, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { UploadCloud, Wifi, HardDrive, Cpu, Loader2, CheckCircle, XCircle, Home } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { performOtaUpdate } from '@/app/actions';
@@ -116,7 +116,7 @@ export default function OtaUpdatePage() {
     <div className="h-screen w-screen bg-background text-foreground flex flex-col items-center justify-center p-4 font-body">
        <div className="absolute top-4 left-4">
         <Button asChild variant="outline">
-          <Link href="/aide">Back to AIDE</Link>
+          <Link href="/"><Home className="mr-2"/> Home</Link>
         </Button>
       </div>
       <Card className="w-full max-w-4xl">

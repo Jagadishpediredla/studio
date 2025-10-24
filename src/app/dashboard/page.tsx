@@ -4,6 +4,7 @@
 import JobDashboard from '@/components/job-dashboard';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { Home } from 'lucide-react';
 
 export default function DashboardPage() {
 
@@ -12,7 +13,7 @@ export default function DashboardPage() {
       <header className="flex justify-between items-center pb-4 border-b mb-4">
         <h1 className="text-3xl font-headline">Job Dashboard</h1>
         <Button asChild variant="outline">
-          <Link href="/aide">Back to AIDE</Link>
+          <Link href="/"><Home className="mr-2"/> Home</Link>
         </Button>
       </header>
       <main className="flex-grow overflow-y-auto">

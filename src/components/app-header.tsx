@@ -7,81 +7,54 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
-import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, LayoutDashboard, Cpu, MoreVertical } from "lucide-react";
+import { Cog, Rocket, Wifi, History, LayoutDashboard, Cpu, MoreVertical, Home } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { ESP32Svg } from './esp32-svg';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
+  projectName: string;
   onManualAction: (step: keyof Omit<PipelineStatus, 'codeGen'> | 'testConnection') => void;
   onShowHistory: () => void;
   isGenerating: boolean;
 }
 
-export default function AppHeader({ onManualAction, onShowHistory, isGenerating, className, ...props }: AppHeaderProps) {
+export default function AppHeader({ projectName, onManualAction, onShowHistory, isGenerating, className, ...props }: AppHeaderProps) {
   
   return (
     <header className={cn("flex items-center justify-between px-3 py-2 border-b h-14", className)} {...props}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-2">
-                <svg
+                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 256 256"
                   className="h-8 w-8 text-primary"
                 >
                   <rect width="256" height="256" fill="none" />
-                  <path
-                    d="M88,140a7.8,7.8,0,0,1-8,8,12,12,0,0,1-12-12,8,8,0,0,1,16,0,12,12,0,0,1-12,12,7.8,7.8,0,0,1-8-8"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="16"
-                  />
-                  <path
-                    d="M112,116a7.8,7.8,0,0,1,8,8,12,12,0,0,1,12-12,8,8,0,0,1,0,16,12,12,0,0,1-12-12,7.8,7.8,0,0,1,8-8Z"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="16"
-                  />
-                  <path
-                    d="M168,140a7.8,7.8,0,0,1-8,8,12,12,0,0,1-12-12,8,8,0,0,1,16,0,12,12,0,0,1-12,12,7.8,7.8,0,0,1-8-8"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="16"
-                  />
-                  <path
-                    d="M192,116a7.8,7.8,0,0,1,8,8,12,12,0,0,1,12-12,8,8,0,0,1,0,16,12,12,0,0,1-12-12,7.8,7.8,0,0,1,8-8Z"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="16"
-                  />
-                  <rect
-                    x="32"
-                    y="48"
-                    width="192"
-                    height="160"
-                    rx="16"
-                    transform="translate(256 256) rotate(180)"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="16"
-                  />
+                  <path d="M88,140a7.8,7.8,0,0,1-8,8,12,12,0,0,1-12-12,8,8,0,0,1,16,0,12,12,0,0,1-12,12,7.8,7.8,0,0,1-8-8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16" />
+                  <path d="M112,116a7.8,7.8,0,0,1,8,8,12,12,0,0,1,12-12,8,8,0,0,1,0,16,12,12,0,0,1-12-12,7.8,7.8,0,0,1,8-8Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
+                  <path d="M168,140a7.8,7.8,0,0,1-8,8,12,12,0,0,1-12-12,8,8,0,0,1,16,0,12,12,0,0,1-12,12,7.8,7.8,0,0,1-8-8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16" />
+                  <path d="M192,116a7.8,7.8,0,0,1,8,8,12,12,0,0,1,12-12,8,8,0,0,1,0,16,12,12,0,0,1-12-12,7.8,7.8,0,0,1,8-8Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16" />
+                  <rect x="32" y="48" width="192" height="160" rx="16" transform="translate(256 256) rotate(180)" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
                 </svg>
-                <h1 className="text-xl font-headline font-bold">AIoT Studio</h1>
             </Link>
+             <div className="h-6 w-px bg-border" />
+             <h1 className="text-xl font-headline font-bold text-foreground">{projectName}</h1>
         </div>
         <div className="flex items-center gap-1">
             <TooltipProvider>
+                 <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" asChild>
+                            <Link href="/">
+                                <Home className="h-5 w-5" />
+                                <span className="sr-only">Project Dashboard</span>
+                            </Link>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Project Dashboard</p></TooltipContent>
+                </Tooltip>
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" asChild>
@@ -104,10 +77,15 @@ export default function AppHeader({ onManualAction, onShowHistory, isGenerating,
                 </Tooltip>
                  <Dialog>
                   <DialogTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                        <Cpu className="h-5 w-5" />
-                        <span className="sr-only">Pinout</span>
-                    </Button>
+                     <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                                <Cpu className="h-5 w-5" />
+                                <span className="sr-only">Pinout</span>
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>ESP32 Pinout</p></TooltipContent>
+                    </Tooltip>
                   </DialogTrigger>
                   <DialogContent className="max-w-[90vw] md:max-w-4xl h-[90vh] flex flex-col">
                     <DialogHeader>
