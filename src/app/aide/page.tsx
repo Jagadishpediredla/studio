@@ -11,18 +11,16 @@ import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStat
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
 
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from "react-resizable-panels";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AppHeader from '@/components/app-header';
 import AiControls from '@/components/ai-controls';
 import CodeEditorPanel from '@/components/code-editor-panel';
 import IntelligencePanel from '@/components/intelligence-panel';
-import ProjectExplorer from '@/components/project-explorer';
 import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
 import DeploymentPipeline from '@/components/deployment-pipeline';
 import StatusIndicator from '@/components/status-indicator';
-import Esp32Pinout from '@/components/esp32-pinout';
 
 const initialCode = `// Welcome to your AIDE Project!
 // Use the AI Chat to start building.
@@ -567,48 +565,36 @@ Generate the new, complete code block now.
           isGenerating={isGenerating}
         />
         <main className="flex-grow flex min-h-0 border-t">
-            <ResizablePanelGroup direction="horizontal" className="flex-grow">
-              <ResizablePanel defaultSize={15} minSize={15} maxSize={25}>
-                  <ProjectExplorer />
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={60} minSize={30}>
-                  <ResizablePanelGroup direction="vertical">
-                      <ResizablePanel>
-                          <CodeEditorPanel
-                            code={code}
-                            onCodeChange={setCode}
-                            boardInfo={boardInfo}
-                          />
-                      </ResizablePanel>
-                      <ResizableHandle withHandle />
-                      <ResizablePanel defaultSize={35} minSize={25}>
-                           <ResizablePanelGroup direction="horizontal">
-                                <ResizablePanel defaultSize={50} minSize={30}>
-                                    <AiControls
-                                        prompt={prompt}
-                                        setPrompt={setPrompt}
-                                        onSendMessage={handleSendMessage}
-                                        isGenerating={isGenerating}
-                                        chatHistory={chatHistory}
-                                    />
-                                </ResizablePanel>
-                                <ResizableHandle withHandle />
-                                <ResizablePanel defaultSize={50} minSize={30}>
-                                    <IntelligencePanel
-                                        visualizerHtml={visualizerHtml}
-                                        compilationLogs={compilationLogs}
-                                    />
-                                </ResizablePanel>
-                           </ResizablePanelGroup>
-                      </ResizablePanel>
-                  </ResizablePanelGroup>
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
-                  <Esp32Pinout />
-              </ResizablePanel>
-            </ResizablePanelGroup>
+          <ResizablePanelGroup direction="vertical">
+            <ResizablePanel defaultSize={65}>
+              <CodeEditorPanel
+                code={code}
+                onCodeChange={setCode}
+                boardInfo={boardInfo}
+              />
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={35} minSize={20}>
+              <ResizablePanelGroup direction="horizontal">
+                <ResizablePanel defaultSize={50} minSize={30}>
+                  <AiControls
+                    prompt={prompt}
+                    setPrompt={setPrompt}
+                    onSendMessage={handleSendMessage}
+                    isGenerating={isGenerating}
+                    chatHistory={chatHistory}
+                  />
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={50} minSize={30}>
+                  <IntelligencePanel
+                    visualizerHtml={visualizerHtml}
+                    compilationLogs={compilationLogs}
+                  />
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </main>
         <footer className="border-t px-4 py-1 flex items-center gap-4 text-xs">
             <DeploymentPipeline status={pipelineStatus} />

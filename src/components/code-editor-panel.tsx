@@ -1,11 +1,10 @@
+
 "use client";
 
 import * as React from 'react';
 import { useRef, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Code, BookOpen } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { BoardInfo } from "@/lib/types";
 import AceEditor from "react-ace";
 import type { IAceEditor } from "react-ace/lib/types";
@@ -32,7 +31,7 @@ interface CodeEditorPanelProps extends React.HTMLAttributes<HTMLDivElement> {
   boardInfo: BoardInfo;
 }
 
-export default function CodeEditorPanel({ code, onCodeChange, boardInfo, className, ...props }: CodeEditorPanelProps) {
+export default function CodeEditorPanel({ code, onCodeChange, boardInfo }: CodeEditorPanelProps) {
   const editorRef = useRef<IAceEditor | null>(null);
 
   useEffect(() => {
@@ -44,10 +43,10 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo, classNa
   }, [code]);
 
   return (
-    <Card className={cn("flex flex-col", className)} {...props}>
-      <CardHeader>
-        <CardTitle className="font-headline">Code Cockpit</CardTitle>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground pt-2">
+    <div className="flex flex-col h-full bg-card">
+      <header className="p-3 border-b flex items-center justify-between">
+        <h2 className="font-headline text-base">Code Cockpit</h2>
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Code className="h-4 w-4" />
               <span>Board (FQBN):</span>
@@ -63,8 +62,8 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo, classNa
               )}
             </div>
         </div>
-      </CardHeader>
-      <CardContent className="flex-grow min-h-0 p-0">
+      </header>
+      <main className="flex-grow min-h-0">
           <AceEditor
             ref={editorRef as React.RefObject<AceEditor>}
             mode="c_cpp"
@@ -89,7 +88,7 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo, classNa
             height="100%"
             className="font-code"
           />
-      </CardContent>
-    </Card>
+      </main>
+    </div>
   );
 }

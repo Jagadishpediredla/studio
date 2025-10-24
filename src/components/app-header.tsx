@@ -7,7 +7,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
-import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, LayoutDashboard } from "lucide-react";
+import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, LayoutDashboard, Cpu } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { ScrollArea } from './ui/scroll-area';
+import { ESP32Svg } from './esp32-svg';
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   onManualAction: (step: keyof Omit<PipelineStatus, 'codeGen'> | 'testConnection') => void;
@@ -87,6 +90,24 @@ export default function AppHeader({ onManualAction, onShowHistory, isGenerating,
                 <History className="mr-2 h-4 w-4" />
                 Version History
             </Button>
+             <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Cpu className="mr-2 h-4 w-4" />
+                  Pinout
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle className="font-headline">ESP32 Pinout - Detailed View</DialogTitle>
+                </DialogHeader>
+                <div className="flex-grow min-h-0">
+                  <ScrollArea className="h-full w-full">
+                      <ESP32Svg className="w-full h-auto" />
+                  </ScrollArea>
+                </div>
+              </DialogContent>
+            </Dialog>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" disabled={isGenerating}>
