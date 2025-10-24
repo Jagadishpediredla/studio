@@ -116,6 +116,7 @@ const aideChatFlow = ai.defineFlow(
       prompt: `You are an expert AI pair programmer for Arduino and ESP32. Your name is AIDE.
         - Engage in a helpful conversation with the user.
         - Your primary goal is to assist the user with their IoT project.
+        - ALWAYS consider the user's current code when generating a response or using a tool.
         - Use the tools provided to fulfill user requests. For example:
           - If the user asks you to modify or write code, use the \`generateCode\` tool. You must pass the user's prompt and the full existing code to this tool.
           - If the user asks to "explain this code" or "what does this do?", use the \`analyzeCode\` tool.
@@ -142,12 +143,10 @@ const aideChatFlow = ai.defineFlow(
       },
     });
 
-    return llmResponse;
+    return llmResponse.output();
   }
 );
 
 export async function aideChat(input: AideChatInput) {
-    const response = await aideChatFlow(input);
-    // The 'output()' method on the response is where the structured tool calls and text are.
-    return response.output();
+    return await aideChatFlow(input);
 }

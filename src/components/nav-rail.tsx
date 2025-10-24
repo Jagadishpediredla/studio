@@ -3,19 +3,18 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Home, LayoutDashboard, Settings, History, Bot, Terminal, BrainCircuit } from "lucide-react";
+import { Home, LayoutDashboard, Settings, History, Bot, TestTubeDiagonal } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavRailProps {
-    onManualAction: (action: 'showHistory' | 'showLogs' | 'showVisualizer') => void;
+    onManualAction: (action: 'showHistory' | 'showIntelligencePanel') => void;
 }
 
 const navItems = [
     { href: "/", icon: Home, label: "Projects" },
     { href: "/dashboard", icon: LayoutDashboard, label: "Job Dashboard" },
     { action: "showHistory", icon: History, label: "Version History" },
-    { action: "showLogs", icon: Terminal, label: "Logs" },
-    { action: "showVisualizer", icon: BrainCircuit, label: "Visualizer" },
+    { action: "showIntelligencePanel", icon: TestTubeDiagonal, label: "Intelligence Panel" },
     { href: "/settings", icon: Settings, label: "AI Settings" },
 ];
 

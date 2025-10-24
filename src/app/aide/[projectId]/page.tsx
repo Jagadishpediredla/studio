@@ -9,7 +9,7 @@ import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getB
 import type { HistoryItem, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo, Project } from '@/lib/types';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
-import { type ToolRequestPart } from 'genkit';
+import { type ToolRequestPart, type GenerateResponse } from 'genkit';
 import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
 import { generateTechnicalAnalysisReport } from '@/ai/flows/generate-technical-analysis-report';
@@ -34,8 +34,9 @@ export default function AidePage() {
   
   const [prompt, setPrompt] = useState<string>('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isLogsOpen, setIsLogsOpen] = useState(false);
-  const [isVisualizerOpen, setIsVisualizerOpen] = useState(false);
+  const [isIntelligencePanelOpen, setIsIntelligencePanelOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'logs' | 'visualizer'>('logs');
+
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [compilationLogs, setCompilationLogs] = useState<StatusUpdate[]>([]);
@@ -56,7 +57,7 @@ export default function AidePage() {
   const chatHistory = project?.chatHistory ?? [];
   const boardInfo = project?.boardInfo ?? { fqbn: 'esp32:esp32:esp32', libraries: [] };
   const versionHistory = project?.versionHistory ?? [];
-  const visualizerHtml = project?.versionHistory?.[0]?.visualizerHtml ?? '';
+  const visualizerHtml = project?.versionHistory?.[0]?.visualizerHtml ?? '<body>No visualization available yet.</body>';
 
 
   const cleanupListeners = useCallback(() => {
@@ -94,10 +95,9 @@ export default function AidePage() {
   }, [projectId, router, toast, cleanupListeners]);
 
   const updateProjectData = useCallback(async (updates: Partial<Omit<Project, 'id'>>) => {
-      if (!project) return;
+      if (!projectId) return;
       
-      const updatedProject = { ...project, ...updates, updatedAt: new Date().toISOString() };
-      setProject(updatedProject);
+      setProject(prev => prev ? { ...prev, ...updates, updatedAt: new Date().toISOString() } : null);
       
       const result = await updateProject(projectId, updates);
       if (!result.success) {
@@ -108,7 +108,7 @@ export default function AidePage() {
           })
       }
       
-  }, [project, projectId, toast]);
+  }, [projectId, toast]);
   
   const addLog = (message: string, type: StatusUpdate['type'] = 'info') => {
     setCompilationLogs(prev => {
@@ -262,7 +262,7 @@ export default function AidePage() {
     setIsGenerating(true);
 
     try {
-      const response = await aideChat({
+      const response: GenerateResponse = await aideChat({
         history: chatHistory.map(m => ({ role: m.role, content: m.content as string })),
         code,
         prompt: currentPrompt,
@@ -300,7 +300,8 @@ export default function AidePage() {
 
   const monitorCompilationStatus = useCallback((requestId: string, submitTime: number) => {
     cleanupListeners();
-    setIsLogsOpen(true);
+    setIsIntelligencePanelOpen(true);
+    setActiveTab('logs');
 
     const statusRef = ref(database, `status/${requestId}`);
     addLog(`[CLOUD] Listening to Firebase: /status/${requestId}`);
@@ -439,7 +440,8 @@ export default function AidePage() {
         compileCode: async () => {
             setCompilationLogs([]);
             addLog('[AIDE] Starting compilation pipeline...');
-            setIsLogsOpen(true);
+            setIsIntelligencePanelOpen(true);
+            setActiveTab('logs');
             
             addLog('[AIDE] Checking for online desktop clients...');
             const health = await findActiveDesktopClient();
@@ -473,7 +475,8 @@ export default function AidePage() {
             updateProjectData({
               versionHistory: [{...versionHistory[0], visualizerHtml: html}, ...versionHistory.slice(1)]
             });
-            setIsVisualizerOpen(true);
+            setIsIntelligencePanelOpen(true);
+            setActiveTab('visualizer');
             return { html };
         },
         runTechnicalAnalysis: async (input) => {
@@ -494,7 +497,7 @@ export default function AidePage() {
             } else if (toolName === 'analyzeCode') {
                  assistantMessageContent = toolResponse.explanation;
             } else if (toolName === 'visualizeCode') {
-                 assistantMessageContent = `I've generated a new visual explanation of the code. You can see it by clicking the "Visualizer" icon in the navigation rail.`;
+                 assistantMessageContent = `I've generated a new visual explanation of the code. You can see it in the Intelligence Panel.`;
             } else if (toolName === 'runTechnicalAnalysis') {
                  assistantMessageContent = `Here is the technical analysis report:\n\n${toolResponse.report}`;
             } else {
@@ -520,17 +523,13 @@ export default function AidePage() {
   };
 
 
-  const handleManualAction = async (action: 'compile' | 'showHistory' | 'showLogs' | 'showVisualizer') => {
+  const handleManualAction = async (action: 'compile' | 'showHistory' | 'showIntelligencePanel') => {
     if (action === 'showHistory') {
         setIsHistoryOpen(true);
         return;
     }
-    if (action === 'showLogs') {
-        setIsLogsOpen(true);
-        return;
-    }
-    if (action === 'showVisualizer') {
-        setIsVisualizerOpen(true);
+    if (action === 'showIntelligencePanel') {
+        setIsIntelligencePanelOpen(true);
         return;
     }
     
@@ -631,17 +630,9 @@ export default function AidePage() {
         />
         
         <IntelligencePanel
-            isOpen={isLogsOpen}
-            onOpenChange={setIsLogsOpen}
-            defaultTab="logs"
-            visualizerHtml={visualizerHtml}
-            compilationLogs={compilationLogs}
-        />
-
-        <IntelligencePanel
-            isOpen={isVisualizerOpen}
-            onOpenChange={setIsVisualizerOpen}
-            defaultTab="visualizer"
+            isOpen={isIntelligencePanelOpen}
+            onOpenChange={setIsIntelligencePanelOpen}
+            defaultTab={activeTab}
             visualizerHtml={visualizerHtml}
             compilationLogs={compilationLogs}
         />
