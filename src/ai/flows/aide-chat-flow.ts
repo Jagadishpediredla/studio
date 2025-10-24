@@ -6,8 +6,6 @@
  *   This flow can engage in conversation and use tools to generate code or compile it.
  *
  *   - aideChat: The main function to handle chat interactions.
- *   - AideChatInput: The input type for the aideChat function.
- *   - AideChatOutput: The output type for the aideChat function.
  */
 
 import { ai } from '@/ai/genkit';
@@ -25,7 +23,7 @@ import {
 const compileCodeTool = ai.defineTool(
   {
     name: 'compileCode',
-    description: 'Compiles the provided Arduino code. This should be called when the user explicitly asks to compile, build, or run the code.',
+    description: 'Compiles the provided Arduino code. This should be called when the user explicitly asks to compile, build, or run the code, or after fixing a compilation error.',
     inputSchema: z.object({
         code: z.string().describe('The complete Arduino code to compile.'),
         board: z.string().describe('The FQBN of the target board (e.g., esp32:esp32:esp32).'),
@@ -74,6 +72,7 @@ const aideChatFlow = ai.defineFlow(
         - Engage in a helpful conversation with the user.
         - If the user asks you to modify or write code, use the \`generateCode\` tool. You must pass the user's prompt and the full existing code to this tool.
         - If the user asks you to compile, build, deploy, or run the code, use the \`compileCode\` tool.
+        - If the prompt contains a compilation error message, your primary goal is to fix the code. Use the \`generateCode\` tool to provide the corrected code, and then immediately call the \`compileCode\` tool to try building it again.
         - For general chat, just respond with a helpful message.
 
         This is the current code in the editor:
@@ -81,7 +80,7 @@ const aideChatFlow = ai.defineFlow(
         ${code}
         \`\`\`
       `,
-      history: [...history, { role: 'user', content: prompt }],
+      history: [...(history || []), { role: 'user', content: prompt }],
       tools: [generateCodeTool, compileCodeTool],
       model: 'googleai/gemini-2.5-flash',
       config: {
@@ -102,3 +101,5 @@ const aideChatFlow = ai.defineFlow(
 export async function aideChat(input: AideChatInput) {
     return await aideChatFlow(input);
 }
+
+    

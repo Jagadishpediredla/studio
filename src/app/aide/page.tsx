@@ -10,7 +10,7 @@ import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getB
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo } from '@/lib/types';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
-import { Tool as AITool } from 'genkit';
+import { AITool } from 'genkit/ai';
 
 import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from "@/components/ui/resizable";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,6 +22,9 @@ import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
 import DeploymentPipeline from '@/components/deployment-pipeline';
 import StatusIndicator from '@/components/status-indicator';
+import { ESP32Pinout } from '@/components/esp32-pinout';
+import ProjectExplorer from '@/components/project-explorer';
+
 
 const initialCode = `// Welcome to your AIDE Project!
 // Use the AI Chat to start building.
@@ -307,17 +310,22 @@ export default function AidePage() {
             updatePipeline('compile', 'failed');
             const errorDescription = (
                 <div>
-                    <p className="font-semibold">Compilation failed. See details below:</p>
+                    <p className="font-semibold">Compilation failed. Retrying with AI...</p>
                     <pre className="mt-2 w-full rounded-md bg-destructive/20 p-4 text-destructive-foreground whitespace-pre-wrap font-code text-xs">
                         {status.message}
                     </pre>
                 </div>
             );
+
             if (jobStateRef.current.logId) {
               await writeClientLog(jobStateRef.current.logId, 'job_failed', 'Job failed on desktop client', { error: status.message, errorDetails: status.errorDetails });
             }
-            toast({ title: 'Compilation Failed', description: errorDescription, variant: 'destructive', duration: 20000 });
-            setIsGenerating(false);
+            toast({ title: 'Compilation Failed', description: errorDescription, variant: 'destructive', duration: 10000 });
+            
+            // AUTOMATED ERROR FIXING LOOP
+            const retryPrompt = `The compilation failed with the following error. Please analyze this error, fix the code, and then start the compilation again. Error: \n\n${status.message}`;
+            addLog('[AIDE] Compilation failed. Asking AI to fix the code...', 'error');
+            handleSendMessage(retryPrompt);
         }
     };
     
@@ -364,11 +372,16 @@ export default function AidePage() {
   };
 
   const handleExecuteTool = async (tool: AITool, toolInput: any) => {
-    if (tool.name === 'generateCode') {
+    // This is a type assertion because Genkit's `Tool` type from `genkit/ai` is not directly compatible
+    // with the `Tool` type expected by `ai.generate`. This is a workaround.
+    const executableTool = tool as any;
+
+    if (executableTool.name === 'generateCode') {
         updatePipeline('codeGen', 'processing');
         addLog('[AIDE] Thinking... AI is analyzing your request and the current code.');
         try {
-            const { code: newCode, board: newBoard, libraries: newLibraries } = tool.output as any;
+            const { code: newCode, board: newBoard, libraries: newLibraries } = await executableTool.fn(toolInput);
+
             const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
             setCode(newCode);
             setBoardInfo(newBoardInfo);
@@ -378,7 +391,6 @@ export default function AidePage() {
             
             toast({ title: 'Success', description: 'New code generated.' });
 
-            // Start AI enrichment in the background
             const aiEnrichmentPromise = (async () => {
                 const historyId = crypto.randomUUID();
                 jobStateRef.current.historyId = historyId;
@@ -409,7 +421,7 @@ export default function AidePage() {
                     board: newBoardInfo, 
                     visualizerHtml: visualizerHtmlResult, 
                     timestamp: new Date(), 
-                    prompt: prompt, // use the captured user prompt
+                    prompt: prompt,
                     explanation: explanationResult,
                 };
                 setHistory(prev => [currentHistoryItem, ...prev]);
@@ -426,7 +438,7 @@ export default function AidePage() {
             toast({ title: 'Code Generation Failed', description: message, variant: 'destructive' });
         }
 
-    } else if (tool.name === 'compileCode') {
+    } else if (executableTool.name === 'compileCode') {
         setPipelineStatus({ serverCheck: 'pending', codeGen: 'completed', compile: 'pending', upload: 'pending', verify: 'pending' });
         setCompilationLogs([]);
         addLog('[AIDE] Starting compilation pipeline...');
@@ -458,31 +470,39 @@ export default function AidePage() {
   }
 
 
-  const handleSendMessage = async () => {
-    if (!prompt.trim()) {
+  const handleSendMessage = async (overridePrompt?: string) => {
+    const currentPrompt = overridePrompt || prompt;
+    if (!currentPrompt.trim()) {
       toast({ title: 'Error', description: 'Message cannot be empty.', variant: 'destructive' });
       return;
     }
     
-    const userPrompt = prompt;
-    const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: userPrompt }];
-    setChatHistory(newHistory);
-    setPrompt('');
+    if (!overridePrompt) {
+        const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: currentPrompt }];
+        setChatHistory(newHistory);
+        setPrompt('');
+    } else {
+        setChatHistory(prev => [...prev, { role: 'assistant', content: "I've detected a compilation error. I will try to fix it and re-compile." }]);
+    }
+
     setIsGenerating(true);
     setCurrentStatus('AI is thinking...');
 
     try {
       const response = await aideChat({
-        history: chatHistory.map(m => ({ role: m.role, content: m.content })),
+        history: chatHistory.map(m => ({ role: m.role, content: m.content as string })),
         code,
-        prompt: userPrompt,
+        prompt: currentPrompt,
       });
 
-      const hasToolChoice = response.toolRequest;
+      const toolRequests = response.toolRequests();
       
-      if (hasToolChoice) {
-         setChatHistory(prev => [...prev, { role: 'assistant', content: `OK, I will do that. ${response.text() || ''}` }]);
-         await handleExecuteTool(hasToolChoice.tool as any, hasToolChoice.input);
+      if (toolRequests && toolRequests.length > 0) {
+         setChatHistory(prev => [...prev, { role: 'assistant', content: response.text() || "OK, I will perform the requested action." }]);
+         // Execute tools sequentially
+         for (const toolRequest of toolRequests) {
+            await handleExecuteTool(toolRequest.tool as any, toolRequest.input);
+         }
       } else {
         setChatHistory(prev => [...prev, { role: 'assistant', content: response.text() }]);
         setIsGenerating(false);
@@ -559,7 +579,7 @@ export default function AidePage() {
           isGenerating={isGenerating}
         />
         <main className="flex-grow flex min-h-0 border-t">
-          <ResizablePanelGroup direction="vertical">
+           <ResizablePanelGroup direction="vertical">
             <ResizablePanel defaultSize={65}>
                <CodeEditorPanel
                 code={code}
@@ -569,24 +589,24 @@ export default function AidePage() {
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={35} minSize={20}>
-              <ResizablePanelGroup direction="horizontal">
-                <ResizablePanel defaultSize={50} minSize={30}>
-                  <AiControls
-                    prompt={prompt}
-                    setPrompt={setPrompt}
-                    onSendMessage={handleSendMessage}
-                    isGenerating={isGenerating}
-                    chatHistory={chatHistory}
-                  />
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={50} minSize={30}>
-                  <IntelligencePanel
-                    visualizerHtml={visualizerHtml}
-                    compilationLogs={compilationLogs}
-                  />
-                </ResizablePanel>
-              </ResizablePanelGroup>
+                <ResizablePanelGroup direction="horizontal">
+                    <ResizablePanel defaultSize={50} minSize={30}>
+                        <AiControls
+                            prompt={prompt}
+                            setPrompt={setPrompt}
+                            onSendMessage={() => handleSendMessage()}
+                            isGenerating={isGenerating}
+                            chatHistory={chatHistory}
+                        />
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel defaultSize={50} minSize={30}>
+                       <IntelligencePanel
+                            visualizerHtml={visualizerHtml}
+                            compilationLogs={compilationLogs}
+                        />
+                    </ResizablePanel>
+                </ResizablePanelGroup>
             </ResizablePanel>
           </ResizablePanelGroup>
         </main>
@@ -607,3 +627,5 @@ export default function AidePage() {
     </TooltipProvider>
   );
 }
+
+    
