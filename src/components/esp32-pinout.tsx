@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -13,18 +14,16 @@ interface Esp32PinoutProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export default function Esp32Pinout({ className, ...props }: Esp32PinoutProps) {
   return (
-    <Card className={cn("flex flex-col", className)} {...props}>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="space-y-1.5">
-          <CardTitle className="font-headline flex items-center gap-2">
-            <Cpu className="h-6 w-6 text-primary" />
-            ESP32 Pinout
-          </CardTitle>
-        </div>
+    <Card className={cn("flex flex-col h-full border-0 shadow-none rounded-none", className)} {...props}>
+      <CardHeader className="p-4 border-b flex flex-row items-center justify-between">
+        <CardTitle className="font-headline flex items-center gap-2 text-base">
+          <Cpu className="h-5 w-5 text-primary" />
+          ESP32 Pinout
+        </CardTitle>
         <Dialog>
           <DialogTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Maximize className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="h-7 w-7">
+              <Maximize className="h-4 w-4" />
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-4xl h-[90vh] flex flex-col">

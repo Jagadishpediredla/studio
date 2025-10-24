@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
 import DeploymentPipeline from '@/components/deployment-pipeline';
 import StatusIndicator from '@/components/status-indicator';
+import Esp32Pinout from '@/components/esp32-pinout';
 
 const initialCode = `// Welcome to your AIDE Project!
 // Use the AI Chat to start building.
@@ -567,13 +568,13 @@ Generate the new, complete code block now.
         />
         <main className="flex-grow flex min-h-0 border-t">
             <ResizablePanelGroup direction="horizontal" className="flex-grow">
-              <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
+              <ResizablePanel defaultSize={15} minSize={15} maxSize={25}>
                   <ProjectExplorer />
               </ResizablePanel>
               <ResizableHandle withHandle />
-              <ResizablePanel>
+              <ResizablePanel defaultSize={60} minSize={30}>
                   <ResizablePanelGroup direction="vertical">
-                      <ResizablePanel defaultSize={70}>
+                      <ResizablePanel>
                           <CodeEditorPanel
                             code={code}
                             onCodeChange={setCode}
@@ -581,27 +582,31 @@ Generate the new, complete code block now.
                           />
                       </ResizablePanel>
                       <ResizableHandle withHandle />
-                      <ResizablePanel defaultSize={30} minSize={20}>
-                          <ResizablePanelGroup direction="horizontal">
-                              <ResizablePanel defaultSize={50}>
-                                  <AiControls
-                                    prompt={prompt}
-                                    setPrompt={setPrompt}
-                                    onSendMessage={handleSendMessage}
-                                    isGenerating={isGenerating}
-                                    chatHistory={chatHistory}
-                                  />
-                              </ResizablePanel>
-                              <ResizableHandle withHandle />
-                              <ResizablePanel defaultSize={50}>
-                                  <IntelligencePanel
-                                    visualizerHtml={visualizerHtml}
-                                    compilationLogs={compilationLogs}
-                                  />
-                              </ResizablePanel>
-                          </ResizablePanelGroup>
+                      <ResizablePanel defaultSize={35} minSize={25}>
+                           <ResizablePanelGroup direction="horizontal">
+                                <ResizablePanel defaultSize={50} minSize={30}>
+                                    <AiControls
+                                        prompt={prompt}
+                                        setPrompt={setPrompt}
+                                        onSendMessage={handleSendMessage}
+                                        isGenerating={isGenerating}
+                                        chatHistory={chatHistory}
+                                    />
+                                </ResizablePanel>
+                                <ResizableHandle withHandle />
+                                <ResizablePanel defaultSize={50} minSize={30}>
+                                    <IntelligencePanel
+                                        visualizerHtml={visualizerHtml}
+                                        compilationLogs={compilationLogs}
+                                    />
+                                </ResizablePanel>
+                           </ResizablePanelGroup>
                       </ResizablePanel>
                   </ResizablePanelGroup>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
+                  <Esp32Pinout />
               </ResizablePanel>
             </ResizablePanelGroup>
         </main>
@@ -622,7 +627,3 @@ Generate the new, complete code block now.
     </TooltipProvider>
   );
 }
-
-  
-
-    
