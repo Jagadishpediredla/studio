@@ -12,10 +12,16 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { generateCode, GenerateCodeInputSchema, GenerateCodeOutputSchema } from './generate-code-from-prompt';
+import { generateCode } from './generate-code-from-prompt';
+import {
+    AideChatInputSchema,
+    AideChatOutputSchema,
+    GenerateCodeInputSchema,
+    GenerateCodeOutputSchema,
+    type AideChatInput,
+} from '@/ai/schemas';
 
 // Define tools for the AI to use
-
 const compileCodeTool = ai.defineTool(
   {
     name: 'compileCode',
@@ -52,23 +58,6 @@ const generateCodeTool = ai.defineTool(
         return await generateCode(input);
     }
 );
-
-
-// Define the input schema for the main chat flow
-const AideChatInputSchema = z.object({
-    history: z.array(z.any()).describe("The conversation history."),
-    code: z.string().describe("The current code in the editor."),
-    prompt: z.string().describe("The user's latest message."),
-});
-export type AideChatInput = z.infer<typeof AideChatInputSchema>;
-
-
-// Define the output schema for the main chat flow
-export const AideChatOutputSchema = z.object({
-    content: z.string().describe("The AI's text response to the user."),
-});
-export type AideChatOutput = z.infer<typeof AideChatOutputSchema>;
-
 
 // Define the main chat flow
 const aideChatFlow = ai.defineFlow(
