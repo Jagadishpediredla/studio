@@ -165,6 +165,7 @@ export async function getJobs(
 ): Promise<{ success: boolean; jobs?: JobSummary[], statistics?: JobStatistics, error?: string }> {
     try {
         const logsRef = ref(database, 'logs');
+        // The primary query is always to get the most recent jobs.
         const jobsQuery = query(logsRef, orderByChild('createdAt'), limitToLast(limit));
         
         const snapshot = await get(jobsQuery);
@@ -172,12 +173,12 @@ export async function getJobs(
         
         let allJobs: JobDetails[] = Object.values(allLogsData);
 
-        // Filter locally
-        if (statusFilter) {
-            allJobs = allJobs.filter(job => job.status === statusFilter);
-        }
+        // Filter locally ONLY if a filter is provided.
         if (userIdFilter) {
             allJobs = allJobs.filter(job => job.clientSide?.userId === userIdFilter);
+        }
+        if (statusFilter) {
+            allJobs = allJobs.filter(job => job.status === statusFilter);
         }
 
         const jobSummaries: JobSummary[] = allJobs.map((log: JobDetails) => ({
@@ -186,13 +187,13 @@ export async function getJobs(
             createdAt: new Date(log.createdAt).toISOString(),
             requestId: log.requestId,
             buildId: log.buildId,
-            // Duration can be complex. Let's take client-side total time if available.
             duration: log.clientSide?.metrics?.totalWaitTime,
         }));
 
-        // Sort descending by creation date
+        // Sort descending by creation date, as limitToLast gives us ascending order.
         jobSummaries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+        // Calculate statistics based on the FILTERED jobs, not all jobs.
         const completedJobs = allJobs.filter(j => j.status === 'completed');
         const totalDuration = completedJobs.reduce((sum, job) => sum + (job.clientSide?.metrics?.totalWaitTime || 0), 0);
 
@@ -229,5 +230,3 @@ export async function getJobDetails(jobId: string): Promise<{ success: boolean; 
         return { success: false, error: error.message };
     }
 }
-
-    
