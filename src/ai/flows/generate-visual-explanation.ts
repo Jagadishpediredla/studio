@@ -19,13 +19,19 @@ export type GenerateVisualExplanationInput = z.infer<typeof GenerateVisualExplan
 
 // Define the output schema
 const GenerateVisualExplanationOutputSchema = z.object({
-  html: z.string().describe('A self-contained HTML document with TailwindCSS that visually explains the code. The HTML should be a full document starting with <body> and should be styled for a dark theme. Use colors and diagrams to represent the logic flow, pin configurations, and components.'),
+  html: z
+    .string()
+    .describe(
+      'A self-contained HTML document with TailwindCSS that visually explains the code. The HTML should be a full document starting with <body> and should be styled for a dark theme. Use colors and diagrams to represent the logic flow, pin configurations, and components.'
+    ),
 });
 
 export type GenerateVisualExplanationOutput = z.infer<typeof GenerateVisualExplanationOutputSchema>;
 
 // Define the main function to trigger the code generation flow
-export async function generateVisualExplanation(input: GenerateVisualExplanationInput): Promise<GenerateVisualExplanationOutput> {
+export async function generateVisualExplanation(
+  input: GenerateVisualExplanationInput
+): Promise<GenerateVisualExplanationOutput> {
   return generateVisualExplanationFlow(input);
 }
 
@@ -60,6 +66,18 @@ Code to explain:
 \`\`\`
 
 Generate the HTML body now.`,
+  config: {
+    safetySettings: [
+      {
+        category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+        threshold: 'BLOCK_NONE',
+      },
+       {
+        category: 'HARM_CATEGORY_HATE_SPEECH',
+        threshold: 'BLOCK_ONLY_HIGH',
+      },
+    ],
+  },
 });
 
 // Define the flow

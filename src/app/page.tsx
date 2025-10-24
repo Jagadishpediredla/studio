@@ -176,7 +176,9 @@ export default function Home() {
 
     const successMsg = `Firmware "${filename}" downloaded successfully.`;
     addLog(`[CLOUD] ${successMsg}`, 'success');
-    await writeClientLog(jobStateRef.current.logId, 'binaries_downloaded', 'All binaries downloaded from Firebase', { fileCount: 1, filename: filename });
+    if (jobStateRef.current.logId) {
+      await writeClientLog(jobStateRef.current.logId, 'binaries_downloaded', 'All binaries downloaded from Firebase', { fileCount: 1, filename: filename });
+    }
     toast({ title: 'Success', description: successMsg });
 
     if (historyId) {
@@ -273,7 +275,9 @@ export default function Home() {
             
             const buildId = jobStateRef.current.buildId || status.buildId;
             if (buildId) {
-              await writeClientLog(jobStateRef.current.logId, 'job_completed', 'Job completed successfully on desktop client');
+              if (jobStateRef.current.logId) {
+                await writeClientLog(jobStateRef.current.logId, 'job_completed', 'Job completed successfully on desktop client');
+              }
               await handleFirmwareDownload(buildId, jobStateRef.current.historyId);
               const uploadSuccess = await runPlaceholderStep('upload');
               if (uploadSuccess) {
@@ -350,12 +354,17 @@ export default function Home() {
     });
   };
 
-
-  const handleGenerate = async () => {
+  const handleSendMessage = async () => {
     if (!prompt.trim()) {
-      toast({ title: 'Error', description: 'Prompt cannot be empty.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Message cannot be empty.', variant: 'destructive' });
       return;
     }
+    
+    const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: prompt }];
+    setChatHistory(newHistory);
+    const userPrompt = prompt;
+    setPrompt('');
+
     setIsGenerating(true);
     setPipelineStatus({ serverCheck: 'pending', codeGen: 'pending', compile: 'pending', upload: 'pending', verify: 'pending' });
     setCompilationLogs([]);
@@ -374,45 +383,70 @@ export default function Home() {
       addLog(`[CLOUD] Error: ${errorMessage}`, 'error');
       toast({ title: 'Health Check Failed', description: errorMessage, variant: 'destructive', duration: 20000 });
       setIsGenerating(false);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: `I couldn't connect to a desktop client. ${errorMessage}` }]);
       return;
     }
     updatePipeline('serverCheck', 'completed');
     addLog(`[FIREBASE] Found online client: ${health.clientId}.`, 'success');
 
     updatePipeline('codeGen', 'processing');
-    addLog('[CLOUD] Generating code with AI...');
+    addLog('[CLOUD] Thinking... AI is analyzing your request and the current code.');
 
     try {
-      const { code: newCode, board: newBoard, libraries: newLibraries } = await generateCode({ prompt });
+      const fullPrompt = `Based on the following conversation history and the current code, please modify the code to address the user's latest request.
+      
+Conversation History:
+${newHistory.map(m => `${m.role}: ${m.content}`).join('\n')}
+
+Current Code:
+\`\`\`cpp
+${code}
+\`\`\`
+
+User's Request: "${userPrompt}"
+
+Generate the new, complete code block along with the board FQBN and any required libraries.
+      `;
+
+      const { code: newCode, board: newBoard, libraries: newLibraries } = await generateCode({ prompt: fullPrompt });
       const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
       setCode(newCode);
       setBoardInfo(newBoardInfo);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: "OK, I've updated the code based on your request. I'm starting the build and deploy pipeline now." }]);
       updatePipeline('codeGen', 'completed');
       
       addLog('[CLOUD] Code generation complete. Generating AI summary and visualization...', 'success');
       
       const aiEnrichmentPromise = (async () => {
+        let visualizerHtmlResult = '<body>Visualizer failed to generate.</body>';
+        let explanationResult = 'AI summary failed to generate.';
         try {
-          const { html: newVisualizerHtml } = await generateVisualExplanation({ code: newCode });
-          setVisualizerHtml(newVisualizerHtml);
+          const { html } = await generateVisualExplanation({ code: newCode });
+          visualizerHtmlResult = html;
+          setVisualizerHtml(visualizerHtmlResult);
           addLog('[CLOUD] AI Visualizer updated.', 'success');
-          
-          const { explanation } = await analyzeCodeForExplanation({ code: newCode });
-          addLog('[CLOUD] AI summary generated.', 'success');
+        } catch (visError: any) {
+          addLog(`[AI] Visualizer failed: ${visError.message}`, 'error');
+        }
+        
+        try {
+           const { explanation } = await analyzeCodeForExplanation({ code: newCode });
+           explanationResult = explanation;
+           addLog('[CLOUD] AI summary generated.', 'success');
+        } catch (expError: any) {
+          addLog(`[AI] Summary failed: ${expError.message}`, 'error');
+        }
 
-          const currentHistoryItem: HistoryItem = { 
+        const currentHistoryItem: HistoryItem = { 
             id: historyId, 
             code: newCode, 
             board: newBoardInfo, 
-            visualizerHtml: newVisualizerHtml, 
+            visualizerHtml: visualizerHtmlResult, 
             timestamp: new Date(), 
-            prompt,
-            explanation,
-          };
-          setHistory(prev => [currentHistoryItem, ...prev]);
-        } catch (aiError: any) {
-            addLog(`[AI] Failed to generate enrichment: ${aiError.message}`, 'error');
-        }
+            prompt: userPrompt,
+            explanation: explanationResult,
+        };
+        setHistory(prev => [currentHistoryItem, ...prev]);
       })();
       
       toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
@@ -435,6 +469,7 @@ export default function Home() {
         updatePipeline('codeGen', 'failed');
       }
       addLog(`[CLOUD] Pipeline Failed: ${message}`, 'error');
+      setChatHistory(prev => [...prev, { role: 'assistant', content: `I ran into an error: ${message}` }]);
       toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });
       setIsGenerating(false);
       cleanupListeners();
@@ -486,7 +521,7 @@ export default function Home() {
     setCode(item.code);
     setBoardInfo(item.board);
     setVisualizerHtml(item.visualizerHtml);
-    setPrompt(item.prompt);
+    setChatHistory(prev => [...prev, {role: 'assistant', content: `Code has been restored to the version from ${item.timestamp.toLocaleString()}.`}])
     setIsHistoryOpen(false);
     toast({ title: 'Restored', description: `Restored code from ${item.timestamp.toLocaleTimeString()}` });
   };
@@ -525,8 +560,9 @@ export default function Home() {
           <AiControls 
             prompt={prompt} 
             setPrompt={setPrompt} 
-            onGenerate={handleGenerate} 
+            onGenerate={handleSendMessage} 
             isGenerating={isGenerating} 
+            chatHistory={chatHistory}
           />
           <Esp32Pinout className="flex-grow min-h-0" />
         </div>
