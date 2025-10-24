@@ -66,7 +66,7 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
   };
   
   const getStatusClass = (status: string) => {
-    const lowerStatus = status.toLowerCase();
+    const lowerStatus = status?.toLowerCase();
     switch (lowerStatus) {
       case 'completed':
         return 'bg-green-100 text-green-800 border-green-200';
@@ -84,7 +84,7 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
             <div className={cn("mt-1 flex h-4 w-4 items-center justify-center rounded-full", isClient ? "bg-blue-500" : "bg-purple-500")}>
                 {isClient ? <Server className="h-2.5 w-2.5 text-white" /> : <Cpu className="h-2.5 w-2.5 text-white" />}
             </div>
-            <div className="flex-1 pb-4 border-l-2 border-border pl-4">
+            <div className="flex-1 pb-4 border-l-2 border-border pl-4 -ml-2">
                  <p className="text-sm font-medium">{event.message || event.event}</p>
                  <p className="text-xs text-muted-foreground">Source: {event.source}</p>
                  <time className="text-xs text-muted-foreground">{new Date(event.timestamp).toLocaleString()}</time>
@@ -99,7 +99,7 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
         {statistics && (
              <Card className="xl:col-span-3">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><BarChart/> Job Statistics</CardTitle>
+                    <CardTitle className="flex items-center gap-2 font-headline"><BarChart/> Job Statistics</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
@@ -126,9 +126,9 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
             </Card>
         )}
 
-      <Card className="xl:col-span-1 flex flex-col h-[calc(100vh-220px)]">
+      <Card className="xl:col-span-1 flex flex-col h-[calc(100vh-250px)]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Briefcase /> Recent Jobs</CardTitle>
+          <CardTitle className="flex items-center gap-2 font-headline"><Briefcase /> Recent Jobs</CardTitle>
         </CardHeader>
         <CardContent className="flex-grow min-h-0">
           {isLoading ? (
@@ -150,12 +150,12 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
                     )}
                   >
                     <div className="flex justify-between items-center">
-                      <div className="text-sm font-semibold font-mono">{job.jobId}</div>
-                      <Badge className={cn('text-xs', getStatusClass(job.status))}>
+                      <div className="text-sm font-semibold font-mono truncate pr-2">{job.jobId}</div>
+                      <Badge className={cn('text-xs shrink-0', getStatusClass(job.status))}>
                         {job.status}
                       </Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">
+                    <div className="text-xs text-muted-foreground mt-1 truncate">
                       {job.requestId}
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -169,9 +169,9 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
         </CardContent>
       </Card>
       
-      <Card className="xl:col-span-2 flex flex-col h-[calc(100vh-220px)]">
+      <Card className="xl:col-span-2 flex flex-col h-[calc(100vh-250px)]">
          <CardHeader>
-          <CardTitle className="flex items-center gap-2"><FileText /> Job Details</CardTitle>
+          <CardTitle className="flex items-center gap-2 font-headline"><FileText /> Job Details</CardTitle>
         </CardHeader>
         <CardContent className="flex-grow min-h-0">
          <ScrollArea className="h-full pr-4">
@@ -184,9 +184,9 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
           ) : selectedJob ? (
             <div className="space-y-6">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div><label className="font-medium text-muted-foreground">Job ID</label><div className="font-mono">{selectedJob.logId}</div></div>
-                    <div><label className="font-medium text-muted-foreground">Request ID</label><div className="font-mono">{selectedJob.requestId}</div></div>
-                    <div><label className="font-medium text-muted-foreground">Build ID</label><div className="font-mono">{selectedJob.buildId}</div></div>
+                    <div><label className="font-medium text-muted-foreground">Job ID</label><div className="font-mono truncate">{selectedJob.logId}</div></div>
+                    <div><label className="font-medium text-muted-foreground">Request ID</label><div className="font-mono truncate">{selectedJob.requestId}</div></div>
+                    <div><label className="font-medium text-muted-foreground">Build ID</label><div className="font-mono truncate">{selectedJob.buildId}</div></div>
                     
                     <div><label className="font-medium text-muted-foreground">Status</label>
                         <Badge className={cn('text-xs', getStatusClass(selectedJob.status))}>
@@ -197,7 +197,7 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
                     <div><label className="font-medium text-muted-foreground">Updated</label><div>{new Date(selectedJob.updatedAt).toLocaleString()}</div></div>
                     
                     <div><label className="font-medium text-muted-foreground">Phase</label><div className="capitalize">{selectedJob.phase}</div></div>
-                    <div><label className="font-medium text-muted-foreground">Client ID</label><div className="font-mono">{selectedJob.serverSide?.clientId}</div></div>
+                    <div><label className="font-medium text-muted-foreground">Client ID</label><div className="font-mono truncate">{selectedJob.serverSide?.clientId}</div></div>
                     <div><label className="font-medium text-muted-foreground">User ID</label><div>{selectedJob.clientSide?.userId}</div></div>
                 </div>
                 

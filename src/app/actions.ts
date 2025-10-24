@@ -22,7 +22,7 @@ export async function findActiveDesktopClient(): Promise<{ success: boolean, cli
     const now = Date.now();
     const activeClients = Object.entries(desktops).filter(([_, info]: [string, any]) => {
       if (info.status !== 'online') return false;
-      const lastSeen = info.lastSeen; // lastSeen is a server timestamp
+      const lastSeen = info.lastSeen;
       return (now - lastSeen) < 30000; // 30 seconds as per docs
     });
 

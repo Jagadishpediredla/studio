@@ -1,6 +1,7 @@
 
 
 
+
 export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
 
 export type PipelineStatus = {
@@ -64,7 +65,7 @@ export interface BuildInfo {
     requestId: string;
     board: string;
     status: 'completed' | 'failed';
-    // NEW: Indicates storage type
+    // Indicates storage type, as per new documentation
     storage?: 'github' | 'firebase';
     github?: {
         repo: string;
@@ -76,8 +77,7 @@ export interface BuildInfo {
         filename: string;
         size: number;
         checksum: string;
-        // NEW: URL for GitHub downloads
-        githubUrl?: string;
+        // URL for GitHub downloads, as per new documentation
         downloadUrl?: string;
     }>;
 }
@@ -102,7 +102,6 @@ export interface JobSummary {
   jobId: string; // logId from the log object
   status: string;
   createdAt: string; // ISO string
-  board?: string; // from build metadata, may not be in log root
   requestId: string;
   buildId: string;
   duration?: number; // Calculated from client-side metrics if available
@@ -118,19 +117,19 @@ export interface JobDetails {
     updatedAt: number;
     status: string;
     phase: string;
-    serverSide: {
+    serverSide?: {
         clientId: string;
         hostname: string;
         events: LogEvent[];
         metrics: Record<string, any>;
     };
-    clientSide: {
+    clientSide?: {
         userId?: string;
         source?: string;
         events: LogEvent[];
         metrics: Record<string, any>;
     };
-    timeline: TimelineEvent[];
+    timeline: { [key: string]: TimelineEvent };
 }
 
 export interface LogEvent {
