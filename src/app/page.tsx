@@ -28,7 +28,13 @@ export default function HomePage() {
       setIsLoading(true);
       const result = await getProjects();
       if (result.success && result.projects) {
-        setProjects(result.projects);
+        // Parse date strings into Date objects
+        const parsedProjects = result.projects.map(p => ({
+            ...p,
+            createdAt: new Date(p.createdAt),
+            updatedAt: new Date(p.updatedAt),
+        }));
+        setProjects(parsedProjects as Project[]);
       } else {
         toast({
             title: "Error loading projects",
@@ -53,9 +59,10 @@ export default function HomePage() {
             description: result.error || "An unknown error occurred.",
             variant: "destructive",
         });
+        setIsCreating(false);
     }
+    // Don't reset state if creation failed, allow user to retry
     setNewProjectName('');
-    setIsCreating(false);
     setIsDialogOpen(false);
   };
   

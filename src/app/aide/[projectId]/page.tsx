@@ -10,6 +10,9 @@ import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStat
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
 import { type ToolRequestPart, type Part } from 'genkit';
+import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
+import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
+import { generateTechnicalAnalysisReport } from '@/ai/flows/generate-technical-analysis-report';
 
 import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from "@/components/ui/resizable";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -68,6 +71,7 @@ export default function AidePage({ params }: { params: { projectId: string } }) 
       const result = await getProject(projectId);
       if (result.success && result.project) {
         setProject(result.project);
+        // Set visualizer from the most recent history item if available
         if (result.project.versionHistory.length > 0) {
           setVisualizerHtml(result.project.versionHistory[0].visualizerHtml);
         }
@@ -85,12 +89,21 @@ export default function AidePage({ params }: { params: { projectId: string } }) 
   }, [projectId, router, toast]);
 
 
-  const updateProjectData = async (updates: Partial<Omit<Project, 'id'>>) => {
+  const updateProjectData = async (updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => {
       if (!project) return;
       
-      const newProjectState = { ...project, ...updates };
+      const newProjectState: Project = { 
+          ...project, 
+          ...updates,
+          // Ensure timestamp objects are correctly handled if they are part of the update
+          versionHistory: (updates.versionHistory || project.versionHistory).map(item => ({
+              ...item,
+              timestamp: new Date(item.timestamp) 
+          })),
+      };
       setProject(newProjectState);
       
+      // The server action will handle converting dates back to strings/numbers for Firebase
       await updateProject(projectId, updates);
   };
   
@@ -143,6 +156,7 @@ export default function AidePage({ params }: { params: { projectId: string } }) 
     let primaryFile: { filename: string, downloadUrl?: string } | null = null;
     let fileType: 'bin' | 'hex' | 'elf' | undefined;
 
+    // Prefer .bin, then .hex, then .elf
     if (build.files?.bin) {
         primaryFile = build.files.bin;
         fileType = 'bin';
@@ -366,7 +380,6 @@ export default function AidePage({ params }: { params: { projectId: string } }) 
     const toolName = toolRequest.toolRequest.name;
     const toolInput = toolRequest.toolRequest.input;
 
-    // A mapping from tool names to functions that execute them
     const toolExecutors: { [key: string]: (input: any) => Promise<any> } = {
         generateCode: async (input) => {
             updatePipeline('codeGen', 'processing');
@@ -377,13 +390,11 @@ export default function AidePage({ params }: { params: { projectId: string } }) 
             const { code: newCode, board: newBoard, libraries: newLibraries } = input;
             const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
             
-            // This is an optimistic update to the UI
             setProject(p => p ? { ...p, code: newCode, boardInfo: newBoardInfo } : null);
 
             addLog('[AIDE] Code generation complete. Generating AI summary and visualization...', 'success');
             toast({ title: 'Success', description: 'New code generated.' });
 
-            // Run these in parallel but don't block the UI response
             Promise.all([
                 generateVisualExplanation({ code: newCode }),
                 analyzeCodeForExplanation({ code: newCode }),
@@ -414,7 +425,7 @@ export default function AidePage({ params }: { params: { projectId: string } }) 
                 addLog(`[AI] Enrichment failed: ${err.message}`, 'error');
             });
             
-            return input; // The tool call output is the generated code object
+            return input;
         },
         compileCode: async () => {
             setPipelineStatus({ serverCheck: 'pending', codeGen: 'completed', compile: 'pending', upload: 'pending', verify: 'pending' });
@@ -503,9 +514,27 @@ export default function AidePage({ params }: { params: { projectId: string } }) 
             responseText += part.text;
           } else if (part.toolRequest) {
             const toolResponse = await executeTool(part);
-            const assistantMessageContent = `Tool ${part.toolRequest.name} executed. Result: ${JSON.stringify(toolResponse)}`;
-             newChatHistory = [...newChatHistory, { role: 'assistant', content: assistantMessageContent }];
-             updateProjectData({ chatHistory: newChatHistory });
+            const toolName = part.toolRequest.name;
+            let assistantMessageContent;
+
+            if (toolName === 'generateCode') {
+                 assistantMessageContent = `I have generated new code for you. I've also updated the AI summary and visualization.`;
+            } else if (toolName === 'compileCode' && toolResponse.success) {
+                 assistantMessageContent = `I have started the compilation process. You can monitor the progress in the logs.`;
+            } else if (toolName === 'analyzeCode') {
+                 assistantMessageContent = toolResponse.explanation;
+            } else if (toolName === 'visualizeCode') {
+                 assistantMessageContent = `I've generated a new visual explanation of the code. You can see it in the "Visualizer" tab.`;
+            } else if (toolName === 'runTechnicalAnalysis') {
+                 assistantMessageContent = `Here is the technical analysis report:\n\n${toolResponse.report}`;
+            } else {
+                 assistantMessageContent = `Tool ${toolName} executed.`;
+            }
+            
+            if (assistantMessageContent) {
+                 newChatHistory = [...newChatHistory, { role: 'assistant', content: assistantMessageContent }];
+                 updateProjectData({ chatHistory: newChatHistory });
+            }
           }
         }
       }
@@ -518,10 +547,14 @@ export default function AidePage({ params }: { params: { projectId: string } }) 
     } catch (error: any) {
       console.error(error);
       const message = error.message || 'An error occurred while talking to the AI.';
-      updateProjectData({ chatHistory: [...chatHistory, { role: 'assistant', content: `I ran into an error: ${message}` }] });
+      const newHistory = [...chatHistory, { role: 'assistant', content: `I ran into an error: ${message}` }];
+      setProject(p => p ? {...p, chatHistory: newHistory} : null);
+      // Avoid calling updateProjectData here to prevent loops on error
       toast({ title: 'AI Error', description: message, variant: 'destructive' });
     } finally {
-        setIsGenerating(false);
+        if (!jobStateRef.current.requestId) {
+          setIsGenerating(false);
+        }
         setCurrentStatus('Awaiting instructions...');
     }
   };

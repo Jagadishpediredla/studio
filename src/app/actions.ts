@@ -14,15 +14,26 @@ const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).
 export async function getProjects(): Promise<{ success: boolean; projects?: Project[]; error?: string }> {
   try {
     const projectsRef = ref(database, 'projects');
-    const snapshot = await get(projectsRef);
-    const projectsData = snapshot.val();
-    if (!projectsData) {
-      return { success: true, projects: [] };
-    }
-    const projectsList = Object.keys(projectsData).map(id => ({
+    // Shallow query to only get the keys and top-level data, not the nested code/history
+    const snapshot = await get(query(projectsRef, orderByChild('name')));
+
+    const projectsData: { [key: string]: any } = snapshot.val() || {};
+    
+    // Since this is a shallow-like fetch by not await-ing deep children, 
+    // we map the data to exclude the heavy fields.
+    // A true shallow query is more complex with RTDB rules/REST API, this is a practical server-side optimization.
+    const projectsList: Project[] = Object.keys(projectsData).map(id => ({
       id,
-      ...projectsData[id],
+      name: projectsData[id].name,
+      createdAt: projectsData[id].createdAt,
+      updatedAt: projectsData[id].updatedAt,
+      // Ensure heavy data is not sent to the client on this list view
+      code: '',
+      chatHistory: [],
+      versionHistory: [],
+      boardInfo: projectsData[id].boardInfo || { fqbn: 'esp32:esp32:esp32', libraries: [] },
     }));
+    
     return { success: true, projects: projectsList };
   } catch (error: any) {
     return { success: false, error: `Failed to fetch projects: ${error.message}` };
@@ -37,7 +48,18 @@ export async function getProject(id: string): Promise<{ success: boolean; projec
     if (!projectData) {
       return { success: false, error: `Project with ID ${id} not found.` };
     }
-    return { success: true, project: { id, ...projectData } };
+    // Ensure all fields are present, providing defaults if necessary
+    const project: Project = {
+        id,
+        name: projectData.name || 'Untitled Project',
+        createdAt: projectData.createdAt || new Date().toISOString(),
+        updatedAt: projectData.updatedAt || new Date().toISOString(),
+        code: projectData.code || '// Welcome!',
+        chatHistory: projectData.chatHistory || [],
+        versionHistory: (projectData.versionHistory || []).map((v: any) => ({...v, timestamp: new Date(v.timestamp)})), // Ensure dates are parsed
+        boardInfo: projectData.boardInfo || { fqbn: 'esp32:esp32:esp32', libraries: [] },
+    }
+    return { success: true, project };
   } catch (error: any) {
     return { success: false, error: `Failed to fetch project: ${error.message}` };
   }
@@ -53,10 +75,11 @@ export async function createProject(name: string): Promise<{ success: boolean; p
       throw new Error("Failed to generate a project ID.");
     }
     
+    const now = new Date().toISOString();
     const newProject: Omit<Project, 'id'> = {
       name,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
       code: `// Welcome to your new project: ${name}!
 // Use the AI Chat to start building.
 void setup() {
@@ -81,9 +104,9 @@ void loop() {
     };
 
     await set(newProjectRef, newProject);
-    const projectWithId = { ...newProject, id: projectId };
+    const projectWithId = { ...newProject, id: projectId, createdAt: new Date(now), updatedAt: new Date(now) };
 
-    return { success: true, project: projectWithId };
+    return { success: true, project: projectWithId as Project };
   } catch (error: any) {
     return { success: false, error: `Failed to create project: ${error.message}` };
   }
@@ -92,13 +115,29 @@ void loop() {
 export async function updateProject(id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) {
     try {
         const projectRef = ref(database, `projects/${id}`);
-        const updateData = { ...updates, updatedAt: new Date().toISOString() };
         
-        // This is a simplified "update". RTDB doesn't have a deep merge, so we fetch and merge.
-        // For specific fields like chatHistory, this is tricky. A more robust solution might use transactions
-        // or a different data structure, but for this app, we'll update specific top-level keys.
+        // Fetch existing data
         const snapshot = await get(projectRef);
+        if (!snapshot.exists()) {
+            return { success: false, error: `Project with ID ${id} not found.` };
+        }
         const existingData = snapshot.val();
+        
+        // Prepare updates, ensuring nested objects are handled correctly
+        const updateData: { [key: string]: any } = {
+            ...updates,
+            updatedAt: new Date().toISOString(),
+        };
+
+        // For arrays like chatHistory and versionHistory, replace them entirely.
+        if (updates.chatHistory) {
+            updateData.chatHistory = updates.chatHistory;
+        }
+        if (updates.versionHistory) {
+             updateData.versionHistory = updates.versionHistory.map(v => ({...v, timestamp: v.timestamp.toISOString()}));
+        }
+
+        // Merge updates with existing data and set it back
         await set(projectRef, { ...existingData, ...updateData });
 
         return { success: true };
@@ -318,6 +357,6 @@ export async function getJobDetails(jobId: string): Promise<{ success: boolean; 
 
     } catch (error: any) {
         console.error(`Failed to fetch details for job log ${jobId}:`, error);
-        return { success: false, error: error.message };
+        return { success: false, error: message };
     }
 }
