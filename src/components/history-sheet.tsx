@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import type { HistoryItem } from "@/lib/types"
-import { Download, History, RotateCcw, Bot } from "lucide-react"
+import { Download, History, RotateCcw, Bot, FileCode, Loader } from "lucide-react"
 import { Badge } from "./ui/badge"
 
 interface HistorySheetProps {
@@ -20,10 +21,12 @@ interface HistorySheetProps {
   onOpenChange: (isOpen: boolean) => void;
   history: HistoryItem[];
   onRestore: (item: HistoryItem) => void;
-  onDownload: (code: string, timestamp: Date) => void;
+  onDownloadCode: (code: string, timestamp: Date) => void;
+  onDownloadBinary: (buildId: string) => void;
+  isGenerating: boolean;
 }
 
-export function HistorySheet({ isOpen, onOpenChange, history, onRestore, onDownload }: HistorySheetProps) {
+export function HistorySheet({ isOpen, onOpenChange, history, onRestore, onDownloadCode, onDownloadBinary, isGenerating }: HistorySheetProps) {
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-2xl w-full flex flex-col">
@@ -33,7 +36,7 @@ export function HistorySheet({ isOpen, onOpenChange, history, onRestore, onDownl
             Version History
           </SheetTitle>
           <SheetDescription>
-            Browse and restore previous AI-generated code versions. Each version includes an AI-generated summary.
+            Browse, restore, and download code and compiled binaries from previous versions.
           </SheetDescription>
         </SheetHeader>
         <div className="flex-grow min-h-0">
@@ -57,23 +60,33 @@ export function HistorySheet({ isOpen, onOpenChange, history, onRestore, onDownl
                       <p className="text-sm text-muted-foreground p-3 bg-muted rounded-md">{item.explanation}</p>
                     </div>
                     <div>
-                       <h4 className="font-semibold mb-2">Board & Libraries</h4>
-                       <div className="flex gap-2 flex-wrap">
+                       <h4 className="font-semibold mb-2">Build Details</h4>
+                       <div className="flex gap-2 flex-wrap items-center">
                           <Badge variant="secondary">Board: {item.board.fqbn}</Badge>
                           {item.board.libraries.map(lib => <Badge key={lib} variant="outline">{lib}</Badge>)}
+                          {item.binary && (
+                            <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                               <FileCode className="mr-1.5 h-3 w-3" />
+                               {item.binary.filename}
+                            </Badge>
+                          )}
                        </div>
                     </div>
                     <h4 className="font-semibold mb-2">Code Snapshot</h4>
                     <pre className="text-sm bg-black p-3 rounded-md max-h-60 overflow-auto font-code">{item.code}</pre>
                     
                     <div className="flex gap-2 pt-2">
-                       <Button size="sm" variant="outline" onClick={() => onRestore(item)}>
+                       <Button size="sm" variant="outline" onClick={() => onRestore(item)} disabled={isGenerating}>
                          <RotateCcw className="mr-2 h-4 w-4" />
-                         Restore This Version
+                         Restore
                        </Button>
-                       <Button size="sm" variant="outline" onClick={() => onDownload(item.code, item.timestamp)}>
+                       <Button size="sm" variant="outline" onClick={() => onDownloadCode(item.code, item.timestamp)} disabled={isGenerating}>
                          <Download className="mr-2 h-4 w-4" />
                          Download Code
+                       </Button>
+                       <Button size="sm" variant="secondary" onClick={() => onDownloadBinary(item.buildId!)} disabled={!item.buildId || isGenerating}>
+                         {isGenerating ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                         Download Binary
                        </Button>
                     </div>
                   </AccordionContent>

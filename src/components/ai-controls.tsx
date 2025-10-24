@@ -1,10 +1,11 @@
+
 "use client";
 
 import type * as React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Wand2, Loader } from "lucide-react";
+import { Wand2, Loader, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AiControlsProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -19,15 +20,19 @@ export default function AiControls({ prompt, setPrompt, onGenerate, isGenerating
     <Card className={cn("shrink-0", className)} {...props}>
       <CardHeader>
         <CardTitle className="font-headline flex items-center gap-2">
-          <Wand2 className="h-6 w-6 text-primary" />
-          AI Controls
+          <MessageSquare className="h-6 w-6 text-primary" />
+          AI Chat
         </CardTitle>
-        <CardDescription>Describe the logic you want to build in plain English.</CardDescription>
+        <CardDescription>Talk to the AI to build and modify your code.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* This will be replaced by a chat history view in the next step */}
+        <div className="h-[120px] rounded-md border bg-muted p-2 text-sm text-muted-foreground italic">
+          Chat history will appear here...
+        </div>
         <Textarea
-          placeholder='e.g., "Blink an LED on pin 13 every second"'
-          className="min-h-[100px] text-base"
+          placeholder='e.g., "Make the LED blink twice as fast."'
+          className="min-h-[80px] text-base"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           disabled={isGenerating}
@@ -38,7 +43,7 @@ export default function AiControls({ prompt, setPrompt, onGenerate, isGenerating
           ) : (
             <Wand2 className="mr-2 h-4 w-4" />
           )}
-          Generate Code
+          Send Message
         </Button>
       </CardContent>
     </Card>

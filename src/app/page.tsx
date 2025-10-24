@@ -7,7 +7,7 @@ import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
 import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
 import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getBuildInfo, getBinary } from '@/app/actions';
-import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStatusUpdate, StatusUpdate } from '@/lib/types';
+import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStatusUpdate, StatusUpdate, ChatMessage } from '@/lib/types';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
 
@@ -55,6 +55,7 @@ const initialVisualizerHtml = `
 export default function Home() {
   const [prompt, setPrompt] = useState<string>('Blink an LED on pin 13');
   const [code, setCode] = useState<string>(initialCode);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [boardInfo, setBoardInfo] = useState<BoardInfo>({ fqbn: 'esp32:esp32:esp32', libraries: [] });
   const [visualizerHtml, setVisualizerHtml] = useState<string>(initialVisualizerHtml);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -78,6 +79,7 @@ export default function Home() {
     logId: '',
     buildId: '',
     lastStatus: '',
+    historyId: '',
   });
   const statusListenerUnsubscribeRef = useRef<() => void>();
   const timeoutRef = useRef<NodeJS.Timeout>();
@@ -120,7 +122,7 @@ export default function Home() {
     return () => cleanupListeners();
   }, []);
   
-  const handleFirmwareDownload = async (buildId: string) => {
+  const handleFirmwareDownload = async (buildId: string, historyId?: string): Promise<{ success: boolean, filename?: string, fileType?: string }> => {
     addLog(`[CLOUD] Build complete. Requesting binary for build ${buildId}...`);
     
     const buildInfoResult = await getBuildInfo(buildId);
@@ -129,7 +131,7 @@ export default function Home() {
       const errorMsg = `Download Failed: ${buildInfoResult.error || 'Could not retrieve build metadata.'}`;
       addLog(`[CLOUD] ${errorMsg}`, 'error');
       toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
-      return;
+      return { success: false };
     }
 
     const availableFiles = buildInfoResult.build.files;
@@ -142,7 +144,7 @@ export default function Home() {
         const errorMsg = `Download Failed: No downloadable files (.hex, .bin, .elf) found in build metadata.`;
         addLog(`[CLOUD] ${errorMsg}`, 'error');
         toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
-        return;
+        return { success: false };
     }
 
     addLog(`[CLOUD] Downloading file type: ${fileType}`);
@@ -152,7 +154,7 @@ export default function Home() {
       const errorMsg = `Download Failed: ${result.error || 'No binary data found.'}`;
       addLog(`[CLOUD] ${errorMsg}`, 'error');
       toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
-      return;
+      return { success: false };
     }
     
     const byteCharacters = atob(result.binary);
@@ -165,16 +167,27 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = result.filename || `firmware-${new Date().getTime()}.${fileType}`;
+    const filename = result.filename || `firmware-${new Date().getTime()}.${fileType}`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    const successMsg = `Firmware "${a.download}" downloaded successfully.`;
+    const successMsg = `Firmware "${filename}" downloaded successfully.`;
     addLog(`[CLOUD] ${successMsg}`, 'success');
-    await writeClientLog(jobStateRef.current.logId, 'binaries_downloaded', 'All binaries downloaded from Firebase', { fileCount: 1, filename: a.download });
+    await writeClientLog(jobStateRef.current.logId, 'binaries_downloaded', 'All binaries downloaded from Firebase', { fileCount: 1, filename: filename });
     toast({ title: 'Success', description: successMsg });
+
+    if (historyId) {
+      setHistory(prev => prev.map(item => 
+        item.id === historyId 
+        ? { ...item, buildId, binary: { filename, fileType: fileType! } } 
+        : item
+      ));
+    }
+    
+    return { success: true, filename, fileType };
   };
 
 
@@ -261,7 +274,7 @@ export default function Home() {
             const buildId = jobStateRef.current.buildId || status.buildId;
             if (buildId) {
               await writeClientLog(jobStateRef.current.logId, 'job_completed', 'Job completed successfully on desktop client');
-              await handleFirmwareDownload(buildId);
+              await handleFirmwareDownload(buildId, jobStateRef.current.historyId);
               const uploadSuccess = await runPlaceholderStep('upload');
               if (uploadSuccess) {
                 await runPlaceholderStep('verify');
@@ -346,7 +359,8 @@ export default function Home() {
     setIsGenerating(true);
     setPipelineStatus({ serverCheck: 'pending', codeGen: 'pending', compile: 'pending', upload: 'pending', verify: 'pending' });
     setCompilationLogs([]);
-    jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: ''};
+    const historyId = crypto.randomUUID();
+    jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: '', historyId };
     
     addLog('[CLOUD] Starting pipeline...');
     
@@ -387,7 +401,7 @@ export default function Home() {
           addLog('[CLOUD] AI summary generated.', 'success');
 
           const currentHistoryItem: HistoryItem = { 
-            id: crypto.randomUUID(), 
+            id: historyId, 
             code: newCode, 
             board: newBoardInfo, 
             visualizerHtml: newVisualizerHtml, 
@@ -440,7 +454,8 @@ export default function Home() {
   const handleManualAction = async (step: keyof Omit<PipelineStatus, 'codeGen'> | 'testConnection') => {
     setIsGenerating(true);
     setCompilationLogs([]);
-    jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: ''};
+    const historyId = crypto.randomUUID();
+    jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: '', historyId };
 
     if (step === 'compile') {
       const health = await findActiveDesktopClient();
@@ -487,6 +502,13 @@ export default function Home() {
     toast({ title: 'Downloaded', description: `Code snapshot downloaded.` });
   }
 
+  const handleDownloadBinary = async (buildId: string) => {
+    if (!buildId) return;
+    setIsGenerating(true); // Show a loading state
+    await handleFirmwareDownload(buildId);
+    setIsGenerating(false);
+  }
+
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
       <main className="grid flex-grow grid-cols-[340px_1fr_380px] grid-rows-[auto_1fr] gap-4 p-4 overflow-hidden">
@@ -527,10 +549,10 @@ export default function Home() {
         onOpenChange={setIsHistoryOpen}
         history={history}
         onRestore={handleRestoreFromHistory}
-        onDownload={handleDownloadCode}
+        onDownloadCode={handleDownloadCode}
+        onDownloadBinary={handleDownloadBinary}
+        isGenerating={isGenerating}
       />
     </div>
   );
 }
-
-    

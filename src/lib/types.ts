@@ -15,6 +15,11 @@ export type BoardInfo = {
   libraries: string[];
 };
 
+export type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export type HistoryItem = {
   id: string;
   code: string;
@@ -23,6 +28,11 @@ export type HistoryItem = {
   visualizerHtml: string;
   timestamp: Date;
   explanation: string; // AI-generated summary of the code
+  buildId?: string; // Link to the build artifact
+  binary?: {
+    filename: string;
+    fileType: string;
+  };
 };
 
 // Represents a log entry or a status update message.
