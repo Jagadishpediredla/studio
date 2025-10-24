@@ -7,15 +7,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Wand2, Loader, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ChatMessage } from '@/lib/types';
 
 interface AiControlsProps extends React.HTMLAttributes<HTMLDivElement> {
   prompt: string;
   setPrompt: (prompt: string) => void;
   onGenerate: () => void;
   isGenerating: boolean;
+  chatHistory: ChatMessage[];
 }
 
-export default function AiControls({ prompt, setPrompt, onGenerate, isGenerating, className, ...props }: AiControlsProps) {
+export default function AiControls({ prompt, setPrompt, onGenerate, isGenerating, chatHistory, className, ...props }: AiControlsProps) {
   return (
     <Card className={cn("shrink-0", className)} {...props}>
       <CardHeader>
