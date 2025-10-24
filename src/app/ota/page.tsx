@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -115,7 +116,7 @@ export default function OtaUpdatePage() {
     <div className="h-screen w-screen bg-background text-foreground flex flex-col items-center justify-center p-4 font-body">
        <div className="absolute top-4 left-4">
         <Button asChild variant="outline">
-          <Link href="/">Back to IDE</Link>
+          <Link href="/aide">Back to AIDE</Link>
         </Button>
       </div>
       <Card className="w-full max-w-4xl">

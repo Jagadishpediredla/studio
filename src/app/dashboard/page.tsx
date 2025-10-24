@@ -12,7 +12,7 @@ export default function DashboardPage() {
       <header className="flex justify-between items-center pb-4 border-b mb-4">
         <h1 className="text-3xl font-headline">Job Dashboard</h1>
         <Button asChild variant="outline">
-          <Link href="/">Back to IDE</Link>
+          <Link href="/aide">Back to AIDE</Link>
         </Button>
       </header>
       <main className="flex-grow overflow-y-auto">

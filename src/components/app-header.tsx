@@ -9,7 +9,7 @@ import DeploymentPipeline from "@/components/deployment-pipeline";
 import StatusIndicator from "@/components/status-indicator";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
-import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, ServerCrash, LayoutDashboard } from "lucide-react";
+import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, ServerCrash, LayoutDashboard, Home } from "lucide-react";
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   pipelineStatus: PipelineStatus;
@@ -26,7 +26,7 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
     <header className={cn("flex flex-col gap-4 p-4 rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 256 256"
@@ -82,9 +82,15 @@ export default function AppHeader({ pipelineStatus, onManualAction, onShowHistor
                   />
                 </svg>
                 <h1 className="text-xl font-headline font-bold">AIoT Studio</h1>
-            </div>
+            </Link>
         </div>
         <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+                <Link href="/aide">
+                    <Rocket className="mr-2 h-4 w-4" />
+                    AIDE
+                </Link>
+            </Button>
             <Button variant="outline" asChild>
                 <Link href="/dashboard">
                     <LayoutDashboard className="mr-2 h-4 w-4" />
