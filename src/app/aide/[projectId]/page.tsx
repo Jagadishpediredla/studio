@@ -23,6 +23,7 @@ import IntelligencePanel from '@/components/intelligence-panel';
 import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Loader2 } from 'lucide-react';
 
 export default function AidePage() {
   const params = useParams();
@@ -94,7 +95,7 @@ export default function AidePage() {
     return () => cleanupListeners();
   }, [projectId, router, toast, cleanupListeners]);
 
-  const updateProjectData = useCallback(async (updates: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>) => {
+  const updateProjectData = useCallback(async (updates: Partial<Omit<Project, 'id'>>) => {
       if (!project) return;
       
       const updatedProject = { ...project, ...updates };
