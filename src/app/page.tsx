@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { generateCode } from '@/ai/flows/generate-code-from-prompt';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
+import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
 import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getBuildInfo, getBinary } from '@/app/actions';
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStatusUpdate, StatusUpdate, CompilationJob } from '@/lib/types';
 import { database } from '@/lib/firebase';
@@ -367,30 +368,42 @@ export default function Home() {
     updatePipeline('codeGen', 'processing');
     addLog('[CLOUD] Generating code with AI...');
 
-    const currentHistoryItem: HistoryItem = { id: crypto.randomUUID(), code, board: boardInfo, visualizerHtml: visualizerHtml, timestamp: new Date(), prompt };
-    setHistory(prev => [currentHistoryItem, ...prev]);
-
     try {
       const { code: newCode, board: newBoard, libraries: newLibraries } = await generateCode({ prompt });
-      
-      setCode(newCode);
       const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
+      setCode(newCode);
       setBoardInfo(newBoardInfo);
       updatePipeline('codeGen', 'completed');
       
-      addLog('[CLOUD] Code generation complete.', 'success');
+      addLog('[CLOUD] Code generation complete. Generating AI summary and visualization...', 'success');
       
-      const visPromise = generateVisualExplanation({ code: newCode }).then(({ html: newVisualizerHtml }) => {
+      // Fork off AI summary and visualization to run in parallel with compilation
+      const aiEnrichmentPromise = (async () => {
+        const { html: newVisualizerHtml } = await generateVisualExplanation({ code: newCode });
         setVisualizerHtml(newVisualizerHtml);
         addLog('[CLOUD] AI Visualizer updated.', 'success');
+        
+        const { explanation } = await analyzeCodeForExplanation({ code: newCode });
+        addLog('[CLOUD] AI summary generated.', 'success');
 
-      });
+        const currentHistoryItem: HistoryItem = { 
+          id: crypto.randomUUID(), 
+          code: newCode, 
+          board: newBoardInfo, 
+          visualizerHtml: newVisualizerHtml, 
+          timestamp: new Date(), 
+          prompt,
+          explanation,
+        };
+        setHistory(prev => [currentHistoryItem, ...prev]);
+      })();
       
       toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
 
       const submitTime = Date.now();
       const requestId = await runCompileStep(health.clientId);
-      await visPromise;
+      
+      await aiEnrichmentPromise;
 
       if (requestId) {
         monitorCompilationStatus(requestId, submitTime);
@@ -403,7 +416,6 @@ export default function Home() {
       const message = error.message || 'An error occurred during the pipeline.';
       if (pipelineStatus.codeGen !== 'completed') {
         updatePipeline('codeGen', 'failed');
-        setHistory(prev => prev.slice(1));
       }
       addLog(`[CLOUD] Pipeline Failed: ${message}`, 'error');
       toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });

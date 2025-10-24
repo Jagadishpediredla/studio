@@ -22,6 +22,7 @@ export type HistoryItem = {
   prompt: string;
   visualizerHtml: string;
   timestamp: Date;
+  explanation: string; // AI-generated summary of the code
 };
 
 // Represents a log entry or a status update message.
