@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -13,14 +14,15 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 // Define the input schema
-const GenerateCodeInputSchema = z.object({
+export const GenerateCodeInputSchema = z.object({
   prompt: z.string().describe('A natural language prompt describing the desired Arduino code snippet.'),
+  code: z.string().optional().describe('The existing code in the editor, if any.'),
 });
 
 export type GenerateCodeInput = z.infer<typeof GenerateCodeInputSchema>;
 
 // Define the output schema
-const GenerateCodeOutputSchema = z.object({
+export const GenerateCodeOutputSchema = z.object({
   code: z.string().describe('The generated Arduino code snippet.'),
   board: z.string().optional().describe('The detected board type (FQBN).'),
   libraries: z.array(z.string()).optional().describe('The required libraries.'),
@@ -38,11 +40,16 @@ const generateCodePrompt = ai.definePrompt({
   name: 'generateCodePrompt',
   input: {schema: GenerateCodeInputSchema},
   output: {schema: GenerateCodeOutputSchema},
-  prompt: `You are an expert Arduino code generator. You will generate Arduino code snippets based on the user's natural language prompt. 
+  prompt: `You are an expert Arduino code generator. You will generate or modify Arduino code based on the user's natural language prompt. If existing code is provided, modify it according to the prompt. Otherwise, generate new code.
 
 Prompt: {{{prompt}}}
 
-Respond with the code snippet, detected board type (if able to detect), and the required libraries (if any). Return the information as a valid JSON.`,
+Existing Code:
+\`\`\`cpp
+{{{code}}}
+\`\`\`
+
+Respond with the complete, updated code snippet, detected board type (if able to detect), and the required libraries (if any). Return the information as a valid JSON.`,
   config: {
         safetySettings: [
           {

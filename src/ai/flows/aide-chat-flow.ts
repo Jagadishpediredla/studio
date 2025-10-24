@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -82,7 +83,7 @@ const aideChatFlow = ai.defineFlow(
     const llmResponse = await ai.generate({
       prompt: `You are an expert AI pair programmer for Arduino and ESP32. Your name is AIDE.
         - Engage in a helpful conversation with the user.
-        - If the user asks you to modify or write code, use the \`generateCode\` tool.
+        - If the user asks you to modify or write code, use the \`generateCode\` tool. You must pass the user's prompt and the full existing code to this tool.
         - If the user asks you to compile, build, deploy, or run the code, use the \`compileCode\` tool.
         - For general chat, just respond with a helpful message.
 
