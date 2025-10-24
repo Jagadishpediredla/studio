@@ -3,24 +3,25 @@
 
 import type * as React from 'react';
 import { useEffect, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Wand2, Loader, Bot, User, MessageSquare } from "lucide-react";
+import { Wand2, Loader, Bot, User, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
 
 interface AiControlsProps {
+  projectName: string;
   prompt: string;
   setPrompt: (prompt: string) => void;
   onSendMessage: () => void;
   isGenerating: boolean;
   chatHistory: ChatMessage[];
+  onManualAction: (action: 'compile' | 'testConnection') => void;
 }
 
-export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerating, chatHistory }: AiControlsProps) {
+export default function AiControls({ projectName, prompt, setPrompt, onSendMessage, isGenerating, chatHistory, onManualAction }: AiControlsProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,14 +41,15 @@ export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerat
   };
 
   return (
-    <Card className="flex flex-col h-full border-0 shadow-none rounded-none">
-      <CardHeader className="p-4 border-b">
-        <CardTitle className="font-headline flex items-center gap-2 text-base">
-          <MessageSquare className="h-5 w-5 text-primary" />
-          AI Chat
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-4 min-h-0 p-4">
+    <div className="flex flex-col h-full bg-card">
+       <header className="p-4 border-b flex justify-between items-center">
+        <h1 className="text-xl font-headline font-bold text-foreground">{projectName}</h1>
+        <Button onClick={() => onManualAction('compile')} disabled={isGenerating}>
+          <Play className="mr-2 h-4 w-4"/>
+          Compile & Run
+        </Button>
+      </header>
+      <div className="flex-grow flex flex-col gap-4 min-h-0 p-4">
         <ScrollArea className="flex-grow h-full pr-4 -mr-4">
             <div className="space-y-6" ref={scrollAreaRef as any}>
             {chatHistory.map((msg, index) => (
@@ -95,7 +97,7 @@ export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerat
             <span className="sr-only">Send Message</span>
             </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

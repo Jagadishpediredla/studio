@@ -61,11 +61,10 @@ export default function IntelligencePanel({
   }
 
   return (
-    <div className="flex flex-col h-full bg-card border-l">
+    <div className="flex flex-col h-full bg-card">
         <Tabs defaultValue="logs" className="flex-grow flex flex-col min-h-0">
             <CardHeader className="p-0">
-                <div className="flex items-center justify-between p-4 border-b">
-                     <h2 className="font-headline text-base">Intelligence Pane</h2>
+                <div className="flex items-center justify-end p-2 border-b">
                     <TabsList>
                         <TabsTrigger value="logs"><Terminal className="mr-2"/>Logs</TabsTrigger>
                         <TabsTrigger value="visualizer"><BrainCircuit className="mr-2"/>Visualizer</TabsTrigger>

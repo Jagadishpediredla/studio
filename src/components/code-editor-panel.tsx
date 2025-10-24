@@ -43,9 +43,9 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo }: CodeE
   }, [code]);
 
   return (
-    <div className="flex flex-col h-full bg-card">
+    <div className="flex flex-col h-full bg-card border-t">
       <header className="p-3 border-b flex items-center justify-between">
-        <h2 className="font-headline text-base">Code Cockpit</h2>
+        <h2 className="font-headline text-base">Code</h2>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Code className="h-4 w-4" />

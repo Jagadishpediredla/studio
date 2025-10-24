@@ -16,14 +16,12 @@ import { generateTechnicalAnalysisReport } from '@/ai/flows/generate-technical-a
 
 import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from "@/components/ui/resizable";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import AppHeader from '@/components/app-header';
+import NavRail from '@/components/nav-rail';
 import AiControls from '@/components/ai-controls';
 import CodeEditorPanel from '@/components/code-editor-panel';
 import IntelligencePanel from '@/components/intelligence-panel';
 import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
-import DeploymentPipeline from '@/components/deployment-pipeline';
-import StatusIndicator from '@/components/status-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AidePage() {
@@ -38,15 +36,7 @@ export default function AidePage() {
   const [visualizerHtml, setVisualizerHtml] = useState<string>('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
-  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({
-    serverCheck: 'pending',
-    codeGen: 'pending',
-    compile: 'pending',
-    upload: 'pending',
-    verify: 'pending',
-  });
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState('Awaiting instructions...');
   const [compilationLogs, setCompilationLogs] = useState<StatusUpdate[]>([]);
   const { toast } = useToast();
   
@@ -108,11 +98,6 @@ export default function AidePage() {
       await updateProject(projectId, updates);
   };
   
-
-  const updatePipeline = (step: keyof PipelineStatus, status: PipelineStep) => {
-    setPipelineStatus(prev => ({ ...prev, [step]: status }));
-  };
-  
   const addLog = (message: string, type: StatusUpdate['type'] = 'info') => {
     setCompilationLogs(prev => {
         const newLog: StatusUpdate = {
@@ -125,7 +110,6 @@ export default function AidePage() {
         }
         return [...prev, newLog];
     });
-    setCurrentStatus(message);
   };
 
   const cleanupListeners = () => {
@@ -234,9 +218,7 @@ export default function AidePage() {
 
 
   const runCompileStep = async (desktopId: string): Promise<string | null> => {
-    updatePipeline('compile', 'processing');
-    const logMessage = `[CLOUD] Submitting job to desktop client '${desktopId}'...`;
-    addLog(logMessage);
+    addLog(`[CLOUD] Submitting job to desktop client '${desktopId}'...`);
     
     const payload = { code, board: boardInfo.fqbn, libraries: boardInfo.libraries, desktopId };
     
@@ -249,7 +231,6 @@ export default function AidePage() {
       addLog(`[CLOUD] Job submitted with ID: ${result.requestId}. Waiting for acknowledgment...`);
       return result.requestId;
     } else {
-      updatePipeline('compile', 'failed');
       const errorMessage = result.error || 'Failed to start compilation job via Firebase.';
       addLog(`[CLOUD] Error: ${errorMessage}`, 'error');
       toast({ 
@@ -295,7 +276,6 @@ export default function AidePage() {
 
         if (status.status === 'completed') {
             cleanupListeners();
-            updatePipeline('compile', 'completed');
             addLog('[DESKTOP] Compilation successful. Fetching build information...', 'success');
             
             const buildId = jobStateRef.current.buildId || status.buildId;
@@ -304,12 +284,7 @@ export default function AidePage() {
                 await writeClientLog(jobStateRef.current.logId, 'job_completed', 'Job completed successfully on desktop client');
               }
               await handleFirmwareDownload(buildId, jobStateRef.current.historyId);
-              const uploadSuccess = await runPlaceholderStep('upload');
-              if (uploadSuccess) {
-                await runPlaceholderStep('verify');
-              }
             } else {
-               updatePipeline('compile', 'failed');
                addLog(`[CLOUD] Error: Compilation completed but no buildId was found.`, 'error');
                toast({ title: 'Build Info Failed', description: 'Compilation completed but no buildId was found.', variant: 'destructive' });
             }
@@ -317,7 +292,6 @@ export default function AidePage() {
 
         } else if (status.status === 'failed') {
             cleanupListeners();
-            updatePipeline('compile', 'failed');
             const errorDescription = (
                 <div>
                     <p className="font-semibold">Compilation failed. Retrying with AI...</p>
@@ -340,7 +314,6 @@ export default function AidePage() {
     
     statusListenerUnsubscribeRef.current = onValue(statusRef, onStatusUpdate, (error) => {
         cleanupListeners();
-        updatePipeline('compile', 'failed');
         addLog(`[FIREBASE] Error: Firebase listener error: ${error.message}`, 'error');
         toast({ title: 'Real-time Error', description: `Firebase listener error: ${error.message}`, variant: 'destructive' });
         setIsGenerating(false);
@@ -348,34 +321,16 @@ export default function AidePage() {
 
     timeoutRef.current = setTimeout(() => {
         cleanupListeners();
-        setPipelineStatus(prev => {
-            if (prev.compile === 'processing' || prev.compile === 'pending') {
-                const errorMsg = 'Job timed out after 3 minutes. The desktop client did not respond or complete in time.';
-                addLog(`[CLOUD] Error: ${errorMsg}`, 'error');
-                if (jobStateRef.current.logId) {
-                    writeClientLog(jobStateRef.current.logId, 'timeout', 'Job timeout after 3 minutes');
-                }
-                toast({ title: 'Job Timeout', description: errorMsg, variant: 'destructive' });
-                setIsGenerating(false);
-                return { ...prev, compile: 'failed' };
-            }
-            return prev;
-        });
+        const errorMsg = 'Job timed out after 3 minutes. The desktop client did not respond or complete in time.';
+        addLog(`[CLOUD] Error: ${errorMsg}`, 'error');
+        if (jobStateRef.current.logId) {
+            writeClientLog(jobStateRef.current.logId, 'timeout', 'Job timeout after 3 minutes');
+        }
+        toast({ title: 'Job Timeout', description: errorMsg, variant: 'destructive' });
+        setIsGenerating(false);
     }, 180000);
   };
   
-  const runPlaceholderStep = (step: keyof Omit<PipelineStatus, 'codeGen' | 'compile' | 'serverCheck'>): Promise<boolean> => {
-    return new Promise((resolve) => {
-      updatePipeline(step, 'processing');
-      addLog(`[CLOUD] Simulating ${step} step...`);
-      const duration = 1500 + Math.random() * 1000;
-      setTimeout(() => {
-        updatePipeline(step, 'completed');
-        addLog(`[CLOUD] Simulated ${step} step complete.`, 'success');
-        resolve(true);
-      }, duration);
-    });
-  };
 
   const executeTool = async (toolRequest: ToolRequestPart) => {
     const toolName = toolRequest.toolRequest.name;
@@ -383,7 +338,6 @@ export default function AidePage() {
 
     const toolExecutors: { [key: string]: (input: any) => Promise<any> } = {
         generateCode: async (input) => {
-            updatePipeline('codeGen', 'processing');
             addLog('[AIDE] Thinking... AI is analyzing your request and the current code.');
             const historyId = crypto.randomUUID();
             jobStateRef.current.historyId = historyId;
@@ -429,23 +383,19 @@ export default function AidePage() {
             return input;
         },
         compileCode: async () => {
-            setPipelineStatus({ serverCheck: 'pending', codeGen: 'completed', compile: 'pending', upload: 'pending', verify: 'pending' });
             setCompilationLogs([]);
             addLog('[AIDE] Starting compilation pipeline...');
             
-            updatePipeline('serverCheck', 'processing');
             addLog('[AIDE] Checking for online desktop clients...');
             const health = await findActiveDesktopClient();
 
             if (!health.success || !health.clientId) {
-                updatePipeline('serverCheck', 'failed');
                 const errorMessage = health.error || 'No online desktop clients found.';
                 addLog(`[AIDE] Error: ${errorMessage}`, 'error');
                 toast({ title: 'Health Check Failed', description: errorMessage, variant: 'destructive', duration: 20000 });
                 return { success: false, message: `I couldn't connect to a desktop client. ${errorMessage}` };
             }
 
-            updatePipeline('serverCheck', 'completed');
             addLog(`[AIDE] Found online client: ${health.clientId}.`, 'success');
 
             const submitTime = Date.now();
@@ -499,7 +449,6 @@ export default function AidePage() {
     }
 
     setIsGenerating(true);
-    setCurrentStatus('AI is thinking...');
 
     try {
       const response = await aideChat({
@@ -556,28 +505,29 @@ export default function AidePage() {
         if (!jobStateRef.current.requestId) {
           setIsGenerating(false);
         }
-        setCurrentStatus('Awaiting instructions...');
     }
   };
 
 
-  const handleManualAction = async (step: keyof Omit<PipelineStatus, 'codeGen'> | 'testConnection') => {
+  const handleManualAction = async (action: 'compile' | 'testConnection' | 'showHistory') => {
+    if (action === 'showHistory') {
+        setIsHistoryOpen(true);
+        return;
+    }
+    
     setIsGenerating(true);
     setCompilationLogs([]);
     jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: '', historyId: crypto.randomUUID() };
 
-    if (step === 'compile') {
+    if (action === 'compile') {
         await executeTool({ toolRequest: { name: 'compileCode', input: {} } } as any);
-    } else if (step === 'testConnection') {
+    } else if (action === 'testConnection') {
       const health = await findActiveDesktopClient();
       if (health.success && health.clientId) {
         toast({ title: 'Connection Successful', description: `Successfully connected to desktop client: ${health.clientId}` });
       } else {
         toast({ title: 'Connection Failed', description: health.error || 'Could not connect to desktop client.', variant: 'destructive' });
       }
-      setIsGenerating(false);
-    } else if (step !== 'serverCheck') {
-      await runPlaceholderStep(step);
       setIsGenerating(false);
     } else {
         setIsGenerating(false);
@@ -615,53 +565,43 @@ export default function AidePage() {
 
   if (isLoadingProject || !project) {
     return (
-        <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
-            <header className="flex items-center justify-between px-3 py-2 border-b h-14">
-                <Skeleton className="h-8 w-48" />
-                <div className="flex items-center gap-2">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                    <Skeleton className="h-8 w-8 rounded-full" />
+        <div className="h-screen w-screen bg-background text-foreground flex items-center justify-center">
+            <div className="flex items-center gap-4">
+                <Skeleton className="h-12 w-12 rounded-full" />
+                <div className="space-y-2">
+                    <Skeleton className="h-4 w-[250px]" />
+                    <Skeleton className="h-4 w-[200px]" />
                 </div>
-            </header>
-            <main className="flex-grow flex min-h-0 border-t">
-                <Skeleton className="h-full w-full" />
-            </main>
-             <footer className="border-t px-4 py-1 flex items-center gap-4 text-xs h-14">
-                <Skeleton className="h-8 w-full" />
-             </footer>
+            </div>
         </div>
     )
   }
 
   return (
     <TooltipProvider>
-      <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
-        <AppHeader 
-          projectName={project.name}
-          onManualAction={handleManualAction}
-          onShowHistory={() => setIsHistoryOpen(true)}
-          isGenerating={isGenerating}
-        />
-        <main className="flex-grow flex min-h-0 border-t">
+      <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
+        <NavRail onShowHistory={() => setIsHistoryOpen(true)} />
+        <main className="flex-grow flex min-h-0">
            <ResizablePanelGroup direction="horizontal">
             <ResizablePanel defaultSize={50} minSize={30}>
                 <ResizablePanelGroup direction="vertical">
-                    <ResizablePanel defaultSize={65}>
-                        <CodeEditorPanel
-                            code={code}
-                            onCodeChange={(newCode) => updateProjectData({ code: newCode })}
-                            boardInfo={boardInfo}
-                        />
-                    </ResizablePanel>
-                    <ResizableHandle withHandle />
-                    <ResizablePanel defaultSize={35} minSize={20}>
-                        <AiControls
+                    <ResizablePanel defaultSize={60}>
+                         <AiControls
+                            projectName={project.name}
                             prompt={prompt}
                             setPrompt={setPrompt}
                             onSendMessage={() => handleSendMessage()}
                             isGenerating={isGenerating}
                             chatHistory={chatHistory}
+                            onManualAction={handleManualAction}
+                        />
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel defaultSize={40} minSize={20}>
+                       <CodeEditorPanel
+                            code={code}
+                            onCodeChange={(newCode) => updateProjectData({ code: newCode })}
+                            boardInfo={boardInfo}
                         />
                     </ResizablePanel>
                 </ResizablePanelGroup>
@@ -675,10 +615,7 @@ export default function AidePage() {
             </ResizablePanel>
           </ResizablePanelGroup>
         </main>
-        <footer className="border-t px-4 py-1 flex items-center gap-4 text-xs h-14">
-            <DeploymentPipeline status={pipelineStatus} />
-            <StatusIndicator isProcessing={isGenerating} statusMessage={currentStatus} />
-        </footer>
+        
         <HistorySheet 
           isOpen={isHistoryOpen}
           onOpenChange={setIsHistoryOpen}
@@ -692,5 +629,3 @@ export default function AidePage() {
     </TooltipProvider>
   );
 }
-
-    
