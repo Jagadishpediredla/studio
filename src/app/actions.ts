@@ -3,7 +3,7 @@
 
 import type { Project } from '@/lib/types';
 import { database } from '@/lib/firebase';
-import { ref, get, set, push, query, orderByChild } from 'firebase/database';
+import { ref, get, set, push, query } from 'firebase/database';
 
 const CLIENT_USER_ID = 'user_123'; 
 
@@ -14,7 +14,9 @@ const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).
 export async function getProjects(): Promise<{ success: boolean; projects?: Project[]; error?: string }> {
   try {
     const projectsRef = ref(database, 'projects');
-    const snapshot = await get(query(projectsRef, orderByChild('name')));
+    // REMOVED: query with orderByChild('name') to avoid indexing error.
+    // Sorting will be handled client-side.
+    const snapshot = await get(projectsRef);
 
     const projectsData: { [key: string]: any } = snapshot.val() || {};
     
@@ -23,10 +25,11 @@ export async function getProjects(): Promise<{ success: boolean; projects?: Proj
       name: projectsData[id].name,
       createdAt: projectsData[id].createdAt,
       updatedAt: projectsData[id].updatedAt,
+      // The rest of the data is not needed for the project list
       code: '',
       chatHistory: [],
       versionHistory: [],
-      boardInfo: projectsData[id].boardInfo || { fqbn: 'esp32:esp32:esp32', libraries: [] },
+      boardInfo: { fqbn: '', libraries: [] },
     }));
     
     return { success: true, projects: projectsList };
@@ -98,9 +101,9 @@ void loop() {
     };
 
     await set(newProjectRef, newProject);
-    const projectWithId = { ...newProject, id: projectId, createdAt: now, updatedAt: now };
+    const projectWithId = { ...newProject, id: projectId };
 
-    return { success: true, project: projectWithId as Project };
+    return { success: true, project: projectWithId };
   } catch (error: any) {
     console.error(`Failed to create project: ${error.message}`);
     return { success: false, error: `Failed to create project: ${error.message}` };
@@ -117,7 +120,7 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
             return { success: false, error: `Project with ID ${id} not found.` };
         }
         
-        const updateData: { [key: string]: any } = { ...updates };
+        const updateData: { [key: string]: any } = { ...snapshot.val(), ...updates };
         
         // Ensure updatedAt is always fresh
         updateData.updatedAt = new Date().toISOString();
@@ -130,15 +133,7 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
             }));
         }
 
-        // Use Firebase's 'update' method to patch the data
-        const dbUpdates: { [key: string]: any } = {};
-        for (const key in updateData) {
-            if (Object.prototype.hasOwnProperty.call(updateData, key)) {
-                dbUpdates[`/projects/${id}/${key}`] = (updateData as any)[key];
-            }
-        }
-        
-        await set(child(ref(database), `/projects/${id}`), { ...snapshot.val(), ...updateData });
+        await set(projectRef, updateData);
 
         return { success: true };
     } catch (error: any) {
@@ -151,7 +146,7 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
 // --- Compilation Actions (unchanged from previous state, but included for completeness) ---
 
 import type { BoardInfo, BuildInfo, JobSummary, JobStatistics, JobDetails, LogEvent, TimelineEvent } from '@/lib/types';
-import { child, remove, limitToLast, serverTimestamp } from 'firebase/database';
+import { child, remove, limitToLast } from 'firebase/database';
 
 export async function findActiveDesktopClient(): Promise<{ success: boolean, clientId?: string, error?: string }> {
   try {
@@ -304,7 +299,7 @@ export async function getJobs(
 ): Promise<{ success: boolean; jobs?: JobSummary[], statistics?: JobStatistics, error?: string }> {
     try {
         const logsRef = ref(database, 'logs');
-        const jobsQuery = query(logsRef, orderByChild('createdAt'), limitToLast(limit));
+        const jobsQuery = query(logsRef, limitToLast(limit));
         
         const snapshot = await get(jobsQuery);
         const allLogsData = snapshot.val() || {};
