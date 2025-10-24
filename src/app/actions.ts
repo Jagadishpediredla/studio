@@ -1,13 +1,114 @@
 
 'use server';
 
-import type { BoardInfo, BuildInfo, JobSummary, JobStatistics, JobDetails, LogEvent, TimelineEvent } from '@/lib/types';
-import { database, serverTimestamp } from '@/lib/firebase';
-import { ref, get, set, child, remove, query, orderByChild, equalTo, limitToLast, push } from 'firebase/database';
+import type { BoardInfo, BuildInfo, JobSummary, JobStatistics, JobDetails, LogEvent, TimelineEvent, Project } from '@/lib/types';
+import { database } from '@/lib/firebase';
+import { ref, get, set, child, remove, query, orderByChild, equalTo, limitToLast, push, serverTimestamp } from 'firebase/database';
 
 const CLIENT_USER_ID = 'user_123'; 
 
 const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// --- Project Actions ---
+
+export async function getProjects(): Promise<{ success: boolean; projects?: Project[]; error?: string }> {
+  try {
+    const projectsRef = ref(database, 'projects');
+    const snapshot = await get(projectsRef);
+    const projectsData = snapshot.val();
+    if (!projectsData) {
+      return { success: true, projects: [] };
+    }
+    const projectsList = Object.keys(projectsData).map(id => ({
+      id,
+      ...projectsData[id],
+    }));
+    return { success: true, projects: projectsList };
+  } catch (error: any) {
+    return { success: false, error: `Failed to fetch projects: ${error.message}` };
+  }
+}
+
+export async function getProject(id: string): Promise<{ success: boolean; project?: Project; error?: string }> {
+  try {
+    const projectRef = ref(database, `projects/${id}`);
+    const snapshot = await get(projectRef);
+    const projectData = snapshot.val();
+    if (!projectData) {
+      return { success: false, error: `Project with ID ${id} not found.` };
+    }
+    return { success: true, project: { id, ...projectData } };
+  } catch (error: any) {
+    return { success: false, error: `Failed to fetch project: ${error.message}` };
+  }
+}
+
+export async function createProject(name: string): Promise<{ success: boolean; project?: Project; error?: string }> {
+  try {
+    const projectsRef = ref(database, 'projects');
+    const newProjectRef = push(projectsRef);
+    const projectId = newProjectRef.key;
+
+    if (!projectId) {
+      throw new Error("Failed to generate a project ID.");
+    }
+    
+    const newProject: Omit<Project, 'id'> = {
+      name,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      code: `// Welcome to your new project: ${name}!
+// Use the AI Chat to start building.
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  Serial.begin(115200);
+}
+
+void loop() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(500);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(500);
+}`,
+      chatHistory: [
+        { role: 'assistant', content: "Hello! I'm your AI pair programmer, AIDE. How can I help you build this project?" }
+      ],
+      versionHistory: [],
+      boardInfo: {
+        fqbn: 'esp32:esp32:esp32',
+        libraries: [],
+      },
+    };
+
+    await set(newProjectRef, newProject);
+    const projectWithId = { ...newProject, id: projectId };
+
+    return { success: true, project: projectWithId };
+  } catch (error: any) {
+    return { success: false, error: `Failed to create project: ${error.message}` };
+  }
+}
+
+export async function updateProject(id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) {
+    try {
+        const projectRef = ref(database, `projects/${id}`);
+        const updateData = { ...updates, updatedAt: new Date().toISOString() };
+        
+        // This is a simplified "update". RTDB doesn't have a deep merge, so we fetch and merge.
+        // For specific fields like chatHistory, this is tricky. A more robust solution might use transactions
+        // or a different data structure, but for this app, we'll update specific top-level keys.
+        const snapshot = await get(projectRef);
+        const existingData = snapshot.val();
+        await set(projectRef, { ...existingData, ...updateData });
+
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: `Failed to update project: ${error.message}` };
+    }
+}
+
+
+// --- Compilation Actions ---
 
 export async function findActiveDesktopClient(): Promise<{ success: boolean, clientId?: string, error?: string }> {
   try {
@@ -72,7 +173,6 @@ export async function writeClientLog(logId: string, event: string, message: stri
     try {
         const logRef = ref(database, `logs/${logId}`);
 
-        // Write to clientSide/events
         const clientEventsRef = child(logRef, 'clientSide/events');
         await push(clientEventsRef, {
             timestamp,
@@ -81,7 +181,6 @@ export async function writeClientLog(logId: string, event: string, message: stri
             data
         });
 
-        // Write to shared timeline
         const timelineRef = child(logRef, 'timeline');
         await push(timelineRef, {
             timestamp,
@@ -90,7 +189,6 @@ export async function writeClientLog(logId: string, event: string, message: stri
             message
         });
 
-        // Update main log timestamp
         const updatedAtRef = child(logRef, 'updatedAt');
         await set(updatedAtRef, timestamp);
         
@@ -137,7 +235,6 @@ export async function performOtaUpdate(
   deviceId: string,
   onProgress: (update: { progress: number; message: string; status: string }) => void
 ) {
-  // This is a simulated OTA update process for demonstration purposes.
   const steps = [
     { progress: 10, message: `Connecting to device ${deviceId}...` },
     { progress: 25, message: 'Device connected. Authenticating...' },
@@ -157,7 +254,6 @@ export async function performOtaUpdate(
 }
 
 
-// Actions for the Job Dashboard (rewritten for new schema)
 export async function getJobs(
   limit: number = 50, 
   statusFilter?: string, 
@@ -165,7 +261,6 @@ export async function getJobs(
 ): Promise<{ success: boolean; jobs?: JobSummary[], statistics?: JobStatistics, error?: string }> {
     try {
         const logsRef = ref(database, 'logs');
-        // The primary query is always to get the most recent jobs.
         const jobsQuery = query(logsRef, orderByChild('createdAt'), limitToLast(limit));
         
         const snapshot = await get(jobsQuery);
@@ -173,7 +268,6 @@ export async function getJobs(
         
         let allJobs: JobDetails[] = Object.values(allLogsData);
 
-        // Filter locally ONLY if a filter is provided.
         if (userIdFilter) {
             allJobs = allJobs.filter(job => job.clientSide?.userId === userIdFilter);
         }
@@ -190,10 +284,8 @@ export async function getJobs(
             duration: log.clientSide?.metrics?.totalWaitTime,
         }));
 
-        // Sort descending by creation date, as limitToLast gives us ascending order.
         jobSummaries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-        // Calculate statistics based on the FILTERED jobs, not all jobs.
         const completedJobs = allJobs.filter(j => j.status === 'completed');
         const totalDuration = completedJobs.reduce((sum, job) => sum + (job.clientSide?.metrics?.totalWaitTime || 0), 0);
 
@@ -222,7 +314,6 @@ export async function getJobDetails(jobId: string): Promise<{ success: boolean; 
             return { success: false, error: `Job log with ID ${jobId} not found.` };
         }
         
-        // The data from firebase is the JobDetails object
         return { success: true, job: jobData as JobDetails };
 
     } catch (error: any) {

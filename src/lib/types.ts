@@ -1,5 +1,4 @@
 
-
 export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
 
 export type PipelineStatus = {
@@ -35,14 +34,12 @@ export type HistoryItem = {
   };
 };
 
-// Represents a log entry or a status update message.
 export interface StatusUpdate {
   timestamp: string; // ISO 8601 string
   message: string;
   type: 'info' | 'success' | 'error';
 }
 
-// Represents the direct status object from Firebase
 export interface FirebaseStatusUpdate {
   status: 'acknowledged' | 'preparing' | 'installing_libraries' | 'compiling' | 'uploading' | 'completed' | 'failed';
   message: string;
@@ -63,7 +60,6 @@ export interface BuildInfo {
     requestId: string;
     board: string;
     status: 'completed' | 'failed';
-    // Indicates storage type, as per new documentation
     storage?: 'github' | 'firebase';
     github?: {
         repo: string;
@@ -75,7 +71,6 @@ export interface BuildInfo {
         filename: string;
         size: number;
         checksum: string;
-        // URL for GitHub downloads, as per new documentation
         downloadUrl?: string;
     }>;
 }
@@ -85,9 +80,6 @@ export interface OtaProgress {
     progress: number;
     status: 'uploading' | 'success' | 'failed';
 }
-
-
-// Types based on the final system documentation
 
 export interface JobStatistics {
   totalJobs: number;
@@ -105,8 +97,6 @@ export interface JobSummary {
   duration?: number; // Calculated from client-side metrics if available
 }
 
-
-// This represents a single unified log entry from /logs/{logId}
 export interface JobDetails {
     logId: string;
     requestId: string;
@@ -144,7 +134,6 @@ export interface TimelineEvent {
     message: string;
 }
 
-// Minimal type for CompilationJob, kept for compatibility if needed elsewhere
 export interface CompilationJob {
   id: string;
   status: 'acknowledged' | 'preparing' | 'compiling' | 'uploading' | 'completed' | 'failed';
@@ -153,11 +142,11 @@ export interface CompilationJob {
   timestamp: string; // ISO 8601 string
 }
 
-// New Project type for project-based workflow
 export interface Project {
   id: string;
   name: string;
   createdAt: string; // ISO string
+  updatedAt: string; // ISO string
   code: string;
   chatHistory: ChatMessage[];
   versionHistory: HistoryItem[];

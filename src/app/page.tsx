@@ -3,28 +3,63 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Folder, Clock, ArrowRight } from 'lucide-react';
-import { useProjects } from '@/hooks/use-projects';
-import { useState } from 'react';
+import { Plus, Folder, Clock, ArrowRight, Loader2 } from 'lucide-react';
+import { getProjects, createProject } from '@/app/actions';
+import { type Project } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function HomePage() {
-  const { projects, createProject } = useProjects();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [newProjectName, setNewProjectName] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const handleCreateProject = () => {
-    if (newProjectName.trim()) {
-      createProject(newProjectName.trim());
-      setNewProjectName('');
-      setIsDialogOpen(false);
+  useEffect(() => {
+    const fetchProjects = async () => {
+      setIsLoading(true);
+      const result = await getProjects();
+      if (result.success && result.projects) {
+        setProjects(result.projects);
+      } else {
+        toast({
+            title: "Error loading projects",
+            description: result.error || "Could not fetch project list from the database.",
+            variant: "destructive",
+        })
+      }
+      setIsLoading(false);
+    };
+    fetchProjects();
+  }, [toast]);
+
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return;
+    setIsCreating(true);
+    const result = await createProject(newProjectName.trim());
+    if (result.success && result.project) {
+        router.push(`/aide/${result.project.id}`);
+    } else {
+        toast({
+            title: "Error creating project",
+            description: result.error || "An unknown error occurred.",
+            variant: "destructive",
+        });
     }
+    setNewProjectName('');
+    setIsCreating(false);
+    setIsDialogOpen(false);
   };
   
-  const sortedProjects = [...projects].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const sortedProjects = [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col items-center p-4 sm:p-8 font-body">
@@ -72,7 +107,8 @@ export default function HomePage() {
               />
             </div>
             <DialogFooter>
-              <Button onClick={handleCreateProject} disabled={!newProjectName.trim()}>
+              <Button onClick={handleCreateProject} disabled={!newProjectName.trim() || isCreating}>
+                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create Project
               </Button>
             </DialogFooter>
@@ -86,7 +122,9 @@ export default function HomePage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sortedProjects.length > 0 ? sortedProjects.map(project => (
+              {isLoading ? (
+                <p className="text-muted-foreground col-span-full text-center py-8">Loading projects...</p>
+              ) : sortedProjects.length > 0 ? sortedProjects.map(project => (
                 <Link href={`/aide/${project.id}`} key={project.id} passHref>
                   <div className="p-4 border rounded-lg hover:bg-muted hover:border-primary transition-all cursor-pointer group h-full flex flex-col justify-between">
                     <div>
@@ -96,7 +134,7 @@ export default function HomePage() {
                       </div>
                       <p className="text-sm text-muted-foreground flex items-center gap-2">
                         <Clock className="h-4 w-4"/> 
-                        Last modified: {new Date(project.createdAt).toLocaleString()}
+                        Last modified: {new Date(project.updatedAt).toLocaleString()}
                       </p>
                     </div>
                     <div className="flex justify-end items-center mt-4">

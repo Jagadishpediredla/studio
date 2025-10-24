@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
-import { Cog, Rocket, Wifi, History, LayoutDashboard, Cpu, MoreVertical, Home } from "lucide-react";
+import { Cog, Rocket, Wifi, History, LayoutDashboard, Cpu, MoreVertical, Home, Settings } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { ESP32Svg } from './esp32-svg';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -96,6 +96,17 @@ export default function AppHeader({ projectName, onManualAction, onShowHistory, 
                     </div>
                   </DialogContent>
                 </Dialog>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" asChild>
+                            <Link href="/settings">
+                                <Settings className="h-5 w-5" />
+                                <span className="sr-only">Settings</span>
+                            </Link>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Settings</p></TooltipContent>
+                </Tooltip>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" disabled={isGenerating}>
