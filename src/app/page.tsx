@@ -13,6 +13,7 @@ import { getProjects, createProject } from '@/app/actions';
 import { type Project } from '@/lib/types';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -51,7 +52,13 @@ export default function HomePage() {
     if (!newProjectName.trim()) return;
     setIsCreating(true);
     const result = await createProject(newProjectName.trim());
+    
+    setIsCreating(false);
+    
     if (result.success && result.project) {
+        toast({ title: "Success", description: `Project "${result.project.name}" created.`});
+        setIsDialogOpen(false);
+        setNewProjectName('');
         router.push(`/aide/${result.project.id}`);
     } else {
         toast({
@@ -59,11 +66,7 @@ export default function HomePage() {
             description: result.error || "An unknown error occurred.",
             variant: "destructive",
         });
-        setIsCreating(false);
     }
-    // Don't reset state if creation failed, allow user to retry
-    setNewProjectName('');
-    setIsDialogOpen(false);
   };
   
   const sortedProjects = [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
@@ -111,6 +114,7 @@ export default function HomePage() {
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
+                autoFocus
               />
             </div>
             <DialogFooter>
@@ -130,7 +134,15 @@ export default function HomePage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {isLoading ? (
-                <p className="text-muted-foreground col-span-full text-center py-8">Loading projects...</p>
+                Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-4 border rounded-lg h-36">
+                        <Skeleton className="h-5 w-3/4 mb-4" />
+                        <Skeleton className="h-4 w-1/2 mb-6" />
+                        <div className="flex justify-end">
+                            <Skeleton className="h-4 w-1/4" />
+                        </div>
+                    </div>
+                ))
               ) : sortedProjects.length > 0 ? sortedProjects.map(project => (
                 <Link href={`/aide/${project.id}`} key={project.id} passHref>
                   <div className="p-4 border rounded-lg hover:bg-muted hover:border-primary transition-all cursor-pointer group h-full flex flex-col justify-between">
@@ -160,3 +172,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    

@@ -2,14 +2,14 @@
 "use client";
 
 import * as React from 'react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { aideChat } from '@/ai/flows/aide-chat-flow.ts';
 import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getBuildInfo, getBinary, getProject, updateProject } from '@/app/actions';
-import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo, Project } from '@/lib/types';
+import type { HistoryItem, BoardInfo, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo, Project } from '@/lib/types';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
-import { type ToolRequestPart, type Part } from 'genkit';
+import { type ToolRequestPart } from 'genkit';
 import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
 import { generateTechnicalAnalysisReport } from '@/ai/flows/generate-technical-analysis-report';
@@ -50,69 +50,14 @@ export default function AidePage() {
   const statusListenerUnsubscribeRef = useRef<() => void>();
   const timeoutRef = useRef<NodeJS.Timeout>();
 
-  // Derived state
+  // Derived state, with fallbacks for loading state
   const code = project?.code ?? '';
   const chatHistory = project?.chatHistory ?? [];
   const boardInfo = project?.boardInfo ?? { fqbn: 'esp32:esp32:esp32', libraries: [] };
   const versionHistory = project?.versionHistory ?? [];
 
-  useEffect(() => {
-    const loadProjectData = async () => {
-      setIsLoadingProject(true);
-      const result = await getProject(projectId);
-      if (result.success && result.project) {
-        setProject(result.project);
-        // Set visualizer from the most recent history item if available
-        if (result.project.versionHistory.length > 0) {
-          setVisualizerHtml(result.project.versionHistory[0].visualizerHtml);
-        }
-      } else {
-        toast({ title: 'Error', description: `Could not load project: ${result.error}`, variant: 'destructive' });
-        router.push('/');
-      }
-      setIsLoadingProject(false);
-    };
 
-    if (projectId) {
-      loadProjectData();
-    }
-     return () => cleanupListeners();
-  }, [projectId, router, toast]);
-
-
-  const updateProjectData = async (updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => {
-      if (!project) return;
-      
-      const newProjectState: Project = { 
-          ...project, 
-          ...updates,
-          // Ensure timestamp objects are correctly handled if they are part of the update
-          versionHistory: (updates.versionHistory || project.versionHistory).map(item => ({
-              ...item,
-              timestamp: new Date(item.timestamp) 
-          })),
-      };
-      setProject(newProjectState);
-      
-      // The server action will handle converting dates back to strings/numbers for Firebase
-      await updateProject(projectId, updates);
-  };
-  
-  const addLog = (message: string, type: StatusUpdate['type'] = 'info') => {
-    setCompilationLogs(prev => {
-        const newLog: StatusUpdate = {
-            message,
-            type,
-            timestamp: new Date().toISOString(),
-        };
-        if (prev.length > 0 && prev[prev.length - 1].message === message) {
-            return prev;
-        }
-        return [...prev, newLog];
-    });
-  };
-
-  const cleanupListeners = () => {
+  const cleanupListeners = useCallback(() => {
     if (statusListenerUnsubscribeRef.current) {
         statusListenerUnsubscribeRef.current();
         statusListenerUnsubscribeRef.current = undefined;
@@ -121,8 +66,70 @@ export default function AidePage() {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = undefined;
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const loadProjectData = async () => {
+      if (!projectId) return;
+      setIsLoadingProject(true);
+      const result = await getProject(projectId);
+      if (result.success && result.project) {
+        const loadedProject = {
+          ...result.project,
+          versionHistory: (result.project.versionHistory || []).map(v => ({...v, timestamp: new Date(v.timestamp)}))
+        }
+        setProject(loadedProject as Project);
+        if (loadedProject.versionHistory.length > 0) {
+          setVisualizerHtml(loadedProject.versionHistory[0].visualizerHtml || '');
+        }
+      } else {
+        toast({ title: 'Error', description: `Could not load project: ${result.error}`, variant: 'destructive' });
+        router.push('/');
+      }
+      setIsLoadingProject(false);
+    };
+
+    loadProjectData();
+    
+    return () => cleanupListeners();
+  }, [projectId, router, toast, cleanupListeners]);
+
+  const updateProjectData = useCallback(async (updates: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>) => {
+      if (!project) return;
+      
+      const updatedProject = { ...project, ...updates };
+      setProject(updatedProject);
+      
+      // Debounce updates to avoid hammering the database
+      const handler = setTimeout(async () => {
+        const result = await updateProject(projectId, updates);
+        if (!result.success) {
+            toast({
+                title: "Save Error",
+                description: `Failed to save project changes: ${result.error}`,
+                variant: 'destructive'
+            })
+        }
+      }, 500);
+
+      return () => clearTimeout(handler);
+      
+  }, [project, projectId, toast]);
   
+  const addLog = (message: string, type: StatusUpdate['type'] = 'info') => {
+    setCompilationLogs(prev => {
+        const newLog: StatusUpdate = {
+            message,
+            type,
+            timestamp: new Date().toISOString(),
+        };
+        // Simple check to avoid duplicate consecutive logs
+        if (prev.length > 0 && prev[prev.length - 1].message === message) {
+            return prev;
+        }
+        return [...prev, newLog];
+    });
+  };
   
   const handleFirmwareDownload = async (buildId: string, historyId?: string): Promise<{ success: boolean, filename?: string, fileType?: string }> => {
     addLog(`[CLOUD] Build complete. Requesting binary for build ${buildId}...`);
@@ -243,7 +250,69 @@ export default function AidePage() {
     }
   };
 
-  const monitorCompilationStatus = (requestId: string, submitTime: number) => {
+  // Using useCallback for handleSendMessage to stabilize its reference
+  const handleSendMessage = useCallback(async (overridePrompt?: string) => {
+    const currentPrompt = overridePrompt || prompt;
+    if (!currentPrompt.trim() || !project) return;
+    
+    const userMessage: ChatMessage = { role: 'user', content: currentPrompt };
+    let newChatHistory: ChatMessage[] = [...chatHistory, userMessage];
+
+    if (!overridePrompt) {
+        updateProjectData({ chatHistory: newChatHistory });
+        setPrompt('');
+    } else {
+        const autoFixMessage: ChatMessage = { role: 'assistant', content: "I've detected a compilation error. I will try to fix it and re-compile." };
+        newChatHistory = [...chatHistory, autoFixMessage, userMessage];
+        updateProjectData({ chatHistory: newChatHistory });
+    }
+
+    setIsGenerating(true);
+
+    try {
+      const response = await aideChat({
+        history: chatHistory.map(m => ({ role: m.role, content: m.content as string })),
+        code,
+        prompt: currentPrompt,
+      });
+
+      let responseText = '';
+      if (response.candidates[0].message.content) {
+        for (const part of response.candidates[0].message.content) {
+          if (part.text) {
+            responseText += part.text;
+          } else if (part.toolRequest) {
+            // NOTE: We are intentionally not awaiting executeTool here
+            // because it has its own state management for compilation.
+            // Awaiting it would block the UI from updating with the initial AI response.
+            executeTool(part, newChatHistory); 
+          }
+        }
+      }
+      
+      // Only add a new assistant message if there's text content.
+      // Tool responses will add their own messages.
+      if (responseText) {
+        newChatHistory = [...newChatHistory, { role: 'assistant', content: responseText }];
+        updateProjectData({ chatHistory: newChatHistory });
+      }
+
+    } catch (error: any) {
+      console.error(error);
+      const message = error.message || 'An error occurred while talking to the AI.';
+      const newHistory = [...chatHistory, { role: 'assistant', content: `I ran into an error: ${message}` }];
+      updateProjectData({ chatHistory: newHistory });
+      toast({ title: 'AI Error', description: message, variant: 'destructive' });
+    } finally {
+        if (!jobStateRef.current.requestId) {
+          setIsGenerating(false);
+        }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, prompt, chatHistory, code, updateProjectData, toast]);
+
+
+  const monitorCompilationStatus = useCallback((requestId: string, submitTime: number) => {
     cleanupListeners();
 
     const statusRef = ref(database, `status/${requestId}`);
@@ -329,12 +398,13 @@ export default function AidePage() {
         toast({ title: 'Job Timeout', description: errorMsg, variant: 'destructive' });
         setIsGenerating(false);
     }, 180000);
-  };
+  }, [cleanupListeners, code.length, boardInfo, handleSendMessage, toast]);
   
 
-  const executeTool = async (toolRequest: ToolRequestPart) => {
+  const executeTool = async (toolRequest: ToolRequestPart, currentChatHistory: ChatMessage[]) => {
     const toolName = toolRequest.toolRequest.name;
     const toolInput = toolRequest.toolRequest.input;
+    let newHistory = [...currentChatHistory];
 
     const toolExecutors: { [key: string]: (input: any) => Promise<any> } = {
         generateCode: async (input) => {
@@ -344,12 +414,14 @@ export default function AidePage() {
 
             const { code: newCode, board: newBoard, libraries: newLibraries } = input;
             const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
-            
+
+            // Update local state immediately for responsiveness
             setProject(p => p ? { ...p, code: newCode, boardInfo: newBoardInfo } : null);
 
             addLog('[AIDE] Code generation complete. Generating AI summary and visualization...', 'success');
             toast({ title: 'Success', description: 'New code generated.' });
 
+            // Fire-and-forget the enrichment and saving
             Promise.all([
                 generateVisualExplanation({ code: newCode }),
                 analyzeCodeForExplanation({ code: newCode }),
@@ -373,7 +445,7 @@ export default function AidePage() {
                 updateProjectData({
                     code: newCode,
                     boardInfo: newBoardInfo,
-                    versionHistory: [currentHistoryItem, ...versionHistory],
+                    versionHistory: [currentHistoryItem, ...(project?.versionHistory || [])],
                 });
             }).catch(err => {
                 console.error("Error in AI enrichment:", err);
@@ -425,46 +497,8 @@ export default function AidePage() {
     };
     
     if (toolExecutors[toolName]) {
-        return await toolExecutors[toolName](toolInput);
-    } else {
-        throw new Error(`Unknown tool: ${toolName}`);
-    }
-  };
-
-
-  const handleSendMessage = async (overridePrompt?: string) => {
-    const currentPrompt = overridePrompt || prompt;
-    if (!currentPrompt.trim() || !project) return;
-    
-    const userMessage: ChatMessage = { role: 'user', content: currentPrompt };
-    let newChatHistory: ChatMessage[] = [...chatHistory, userMessage];
-
-    if (!overridePrompt) {
-        updateProjectData({ chatHistory: newChatHistory });
-        setPrompt('');
-    } else {
-        const autoFixMessage: ChatMessage = { role: 'assistant', content: "I've detected a compilation error. I will try to fix it and re-compile." };
-        newChatHistory = [...chatHistory, autoFixMessage, userMessage];
-        updateProjectData({ chatHistory: newChatHistory });
-    }
-
-    setIsGenerating(true);
-
-    try {
-      const response = await aideChat({
-        history: chatHistory.map(m => ({ role: m.role, content: m.content as string })),
-        code,
-        prompt: currentPrompt,
-      });
-
-      let responseText = '';
-      if (response.candidates[0].message.content) {
-        for (const part of response.candidates[0].message.content) {
-          if (part.text) {
-            responseText += part.text;
-          } else if (part.toolRequest) {
-            const toolResponse = await executeTool(part);
-            const toolName = part.toolRequest.name;
+        try {
+            const toolResponse = await toolExecutors[toolName](toolInput);
             let assistantMessageContent;
 
             if (toolName === 'generateCode') {
@@ -482,29 +516,20 @@ export default function AidePage() {
             }
             
             if (assistantMessageContent) {
-                 newChatHistory = [...newChatHistory, { role: 'assistant', content: assistantMessageContent }];
-                 updateProjectData({ chatHistory: newChatHistory });
+                 newHistory = [...newHistory, { role: 'assistant', content: assistantMessageContent }];
+                 updateProjectData({ chatHistory: newHistory });
             }
-          }
+        } catch (error: any) {
+            const errorMessage = `Error executing tool ${toolName}: ${error.message}`;
+            addLog(`[AIDE] ${errorMessage}`, 'error');
+            newHistory = [...newHistory, { role: 'assistant', content: errorMessage }];
+            updateProjectData({ chatHistory: newHistory });
         }
-      }
-
-      if (responseText) {
-        newChatHistory = [...newChatHistory, { role: 'assistant', content: responseText }];
-        updateProjectData({ chatHistory: newChatHistory });
-      }
-
-    } catch (error: any) {
-      console.error(error);
-      const message = error.message || 'An error occurred while talking to the AI.';
-      const newHistory = [...chatHistory, { role: 'assistant', content: `I ran into an error: ${message}` }];
-      setProject(p => p ? {...p, chatHistory: newHistory} : null);
-      // Avoid calling updateProjectData here to prevent loops on error
-      toast({ title: 'AI Error', description: message, variant: 'destructive' });
-    } finally {
-        if (!jobStateRef.current.requestId) {
-          setIsGenerating(false);
-        }
+    } else {
+        const errorMessage = `Unknown tool: ${toolName}`;
+        addLog(`[AIDE] ${errorMessage}`, 'error');
+        newHistory = [...newHistory, { role: 'assistant', content: errorMessage }];
+        updateProjectData({ chatHistory: newHistory });
     }
   };
 
@@ -520,7 +545,7 @@ export default function AidePage() {
     jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: '', historyId: crypto.randomUUID() };
 
     if (action === 'compile') {
-        await executeTool({ toolRequest: { name: 'compileCode', input: {} } } as any);
+        await executeTool({ toolRequest: { name: 'compileCode', input: {} } } as any, chatHistory);
     } else if (action === 'testConnection') {
       const health = await findActiveDesktopClient();
       if (health.success && health.clientId) {
@@ -535,10 +560,11 @@ export default function AidePage() {
   }
 
   const handleRestoreFromHistory = (item: HistoryItem) => {
+    const newChatHistory: ChatMessage[] = [...chatHistory, {role: 'assistant', content: `Code has been restored to the version from ${item.timestamp.toLocaleString()}.`}];
     updateProjectData({ 
         code: item.code, 
         boardInfo: item.board,
-        chatHistory: [...chatHistory, {role: 'assistant', content: `Code has been restored to the version from ${item.timestamp.toLocaleString()}.`}]
+        chatHistory: newChatHistory
     });
     setVisualizerHtml(item.visualizerHtml);
     setIsHistoryOpen(false);
@@ -562,16 +588,19 @@ export default function AidePage() {
     await handleFirmwareDownload(buildId);
     setIsGenerating(false);
   }
+  
+  const handleCodeChange = (newCode: string) => {
+      if (project) {
+        updateProjectData({ code: newCode });
+      }
+  };
 
   if (isLoadingProject || !project) {
     return (
         <div className="h-screen w-screen bg-background text-foreground flex items-center justify-center">
-            <div className="flex items-center gap-4">
-                <Skeleton className="h-12 w-12 rounded-full" />
-                <div className="space-y-2">
-                    <Skeleton className="h-4 w-[250px]" />
-                    <Skeleton className="h-4 w-[200px]" />
-                </div>
+            <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <p className="text-muted-foreground">Loading Project...</p>
             </div>
         </div>
     )
@@ -585,12 +614,12 @@ export default function AidePage() {
            <ResizablePanelGroup direction="horizontal">
             <ResizablePanel defaultSize={50} minSize={30}>
                 <ResizablePanelGroup direction="vertical">
-                    <ResizablePanel defaultSize={60}>
+                    <ResizablePanel defaultSize={60} minSize={30}>
                          <AiControls
                             projectName={project.name}
                             prompt={prompt}
                             setPrompt={setPrompt}
-                            onSendMessage={() => handleSendMessage()}
+                            onSendMessage={handleSendMessage}
                             isGenerating={isGenerating}
                             chatHistory={chatHistory}
                             onManualAction={handleManualAction}
@@ -600,7 +629,7 @@ export default function AidePage() {
                     <ResizablePanel defaultSize={40} minSize={20}>
                        <CodeEditorPanel
                             code={code}
-                            onCodeChange={(newCode) => updateProjectData({ code: newCode })}
+                            onCodeChange={handleCodeChange}
                             boardInfo={boardInfo}
                         />
                     </ResizablePanel>
@@ -629,3 +658,5 @@ export default function AidePage() {
     </TooltipProvider>
   );
 }
+
+    

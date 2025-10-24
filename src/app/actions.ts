@@ -1,9 +1,9 @@
 
 'use server';
 
-import type { BoardInfo, BuildInfo, JobSummary, JobStatistics, JobDetails, LogEvent, TimelineEvent, Project } from '@/lib/types';
+import type { Project } from '@/lib/types';
 import { database } from '@/lib/firebase';
-import { ref, get, set, child, remove, query, orderByChild, equalTo, limitToLast, push, serverTimestamp } from 'firebase/database';
+import { ref, get, set, push, query, orderByChild } from 'firebase/database';
 
 const CLIENT_USER_ID = 'user_123'; 
 
@@ -14,20 +14,15 @@ const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).
 export async function getProjects(): Promise<{ success: boolean; projects?: Project[]; error?: string }> {
   try {
     const projectsRef = ref(database, 'projects');
-    // Shallow query to only get the keys and top-level data, not the nested code/history
     const snapshot = await get(query(projectsRef, orderByChild('name')));
 
     const projectsData: { [key: string]: any } = snapshot.val() || {};
     
-    // Since this is a shallow-like fetch by not await-ing deep children, 
-    // we map the data to exclude the heavy fields.
-    // A true shallow query is more complex with RTDB rules/REST API, this is a practical server-side optimization.
     const projectsList: Project[] = Object.keys(projectsData).map(id => ({
       id,
       name: projectsData[id].name,
       createdAt: projectsData[id].createdAt,
       updatedAt: projectsData[id].updatedAt,
-      // Ensure heavy data is not sent to the client on this list view
       code: '',
       chatHistory: [],
       versionHistory: [],
@@ -44,11 +39,10 @@ export async function getProject(id: string): Promise<{ success: boolean; projec
   try {
     const projectRef = ref(database, `projects/${id}`);
     const snapshot = await get(projectRef);
-    const projectData = snapshot.val();
-    if (!projectData) {
+    if (!snapshot.exists()) {
       return { success: false, error: `Project with ID ${id} not found.` };
     }
-    // Ensure all fields are present, providing defaults if necessary
+    const projectData = snapshot.val();
     const project: Project = {
         id,
         name: projectData.name || 'Untitled Project',
@@ -56,7 +50,7 @@ export async function getProject(id: string): Promise<{ success: boolean; projec
         updatedAt: projectData.updatedAt || new Date().toISOString(),
         code: projectData.code || '// Welcome!',
         chatHistory: projectData.chatHistory || [],
-        versionHistory: (projectData.versionHistory || []).map((v: any) => ({...v, timestamp: new Date(v.timestamp)})), // Ensure dates are parsed
+        versionHistory: projectData.versionHistory || [],
         boardInfo: projectData.boardInfo || { fqbn: 'esp32:esp32:esp32', libraries: [] },
     }
     return { success: true, project };
@@ -94,7 +88,7 @@ void loop() {
   delay(500);
 }`,
       chatHistory: [
-        { role: 'assistant', content: "Hello! I'm your AI pair programmer, AIDE. How can I help you build this project?" }
+        { role: 'assistant', content: `Hello! I'm your AI pair programmer, AIDE. How can I help you build "${name}"?` }
       ],
       versionHistory: [],
       boardInfo: {
@@ -104,50 +98,60 @@ void loop() {
     };
 
     await set(newProjectRef, newProject);
-    const projectWithId = { ...newProject, id: projectId, createdAt: new Date(now), updatedAt: new Date(now) };
+    const projectWithId = { ...newProject, id: projectId, createdAt: now, updatedAt: now };
 
     return { success: true, project: projectWithId as Project };
   } catch (error: any) {
+    console.error(`Failed to create project: ${error.message}`);
     return { success: false, error: `Failed to create project: ${error.message}` };
   }
 }
 
-export async function updateProject(id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) {
+
+export async function updateProject(id: string, updates: Partial<Omit<Project, 'id'>>) {
     try {
         const projectRef = ref(database, `projects/${id}`);
         
-        // Fetch existing data
         const snapshot = await get(projectRef);
         if (!snapshot.exists()) {
             return { success: false, error: `Project with ID ${id} not found.` };
         }
-        const existingData = snapshot.val();
         
-        // Prepare updates, ensuring nested objects are handled correctly
-        const updateData: { [key: string]: any } = {
-            ...updates,
-            updatedAt: new Date().toISOString(),
-        };
+        const updateData: { [key: string]: any } = { ...updates };
+        
+        // Ensure updatedAt is always fresh
+        updateData.updatedAt = new Date().toISOString();
 
-        // For arrays like chatHistory and versionHistory, replace them entirely.
-        if (updates.chatHistory) {
-            updateData.chatHistory = updates.chatHistory;
-        }
+        // Convert Date objects in versionHistory to ISO strings for Firebase
         if (updates.versionHistory) {
-             updateData.versionHistory = updates.versionHistory.map(v => ({...v, timestamp: v.timestamp.toISOString()}));
+            updateData.versionHistory = updates.versionHistory.map(v => ({
+                ...v,
+                timestamp: new Date(v.timestamp).toISOString()
+            }));
         }
 
-        // Merge updates with existing data and set it back
-        await set(projectRef, { ...existingData, ...updateData });
+        // Use Firebase's 'update' method to patch the data
+        const dbUpdates: { [key: string]: any } = {};
+        for (const key in updateData) {
+            if (Object.prototype.hasOwnProperty.call(updateData, key)) {
+                dbUpdates[`/projects/${id}/${key}`] = (updateData as any)[key];
+            }
+        }
+        
+        await set(child(ref(database), `/projects/${id}`), { ...snapshot.val(), ...updateData });
 
         return { success: true };
     } catch (error: any) {
+        console.error(`Failed to update project ${id}: ${error.message}`, error);
         return { success: false, error: `Failed to update project: ${error.message}` };
     }
 }
 
 
-// --- Compilation Actions ---
+// --- Compilation Actions (unchanged from previous state, but included for completeness) ---
+
+import type { BoardInfo, BuildInfo, JobSummary, JobStatistics, JobDetails, LogEvent, TimelineEvent } from '@/lib/types';
+import { child, remove, limitToLast, serverTimestamp } from 'firebase/database';
 
 export async function findActiveDesktopClient(): Promise<{ success: boolean, clientId?: string, error?: string }> {
   try {
@@ -357,6 +361,8 @@ export async function getJobDetails(jobId: string): Promise<{ success: boolean; 
 
     } catch (error: any) {
         console.error(`Failed to fetch details for job log ${jobId}:`, error);
-        return { success: false, error: message };
+        return { success: false, error: error.message };
     }
 }
+
+    
