@@ -61,13 +61,14 @@ export default function IntelligencePanel({
   }
 
   return (
-    <Card className="flex flex-col h-full border-0 shadow-none rounded-none">
+    <div className="flex flex-col h-full bg-card border-l">
         <Tabs defaultValue="logs" className="flex-grow flex flex-col min-h-0">
             <CardHeader className="p-0">
                 <div className="flex items-center justify-between p-4 border-b">
+                     <h2 className="font-headline text-base">Intelligence Pane</h2>
                     <TabsList>
                         <TabsTrigger value="logs"><Terminal className="mr-2"/>Logs</TabsTrigger>
-                        <TabsTrigger value="visualizer"><BrainCircuit className="mr-2"/>AI Visualizer</TabsTrigger>
+                        <TabsTrigger value="visualizer"><BrainCircuit className="mr-2"/>Visualizer</TabsTrigger>
                     </TabsList>
                 </div>
             </CardHeader>
@@ -98,6 +99,6 @@ export default function IntelligencePanel({
                </CardContent>
             </TabsContent>
         </Tabs>
-    </Card>
+    </div>
   );
 }

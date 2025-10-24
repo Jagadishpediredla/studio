@@ -22,9 +22,6 @@ import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
 import DeploymentPipeline from '@/components/deployment-pipeline';
 import StatusIndicator from '@/components/status-indicator';
-import { ESP32Pinout } from '@/components/esp32-pinout';
-import ProjectExplorer from '@/components/project-explorer';
-
 
 const initialCode = `// Welcome to your AIDE Project!
 // Use the AI Chat to start building.
@@ -505,8 +502,6 @@ export default function AidePage() {
          }
       } else {
         setChatHistory(prev => [...prev, { role: 'assistant', content: response.text() }]);
-        setIsGenerating(false);
-        setCurrentStatus('Awaiting instructions...');
       }
 
     } catch (error: any) {
@@ -514,8 +509,9 @@ export default function AidePage() {
       const message = error.message || 'An error occurred while talking to the AI.';
       setChatHistory(prev => [...prev, { role: 'assistant', content: `I ran into an error: ${message}` }]);
       toast({ title: 'AI Error', description: message, variant: 'destructive' });
-      setIsGenerating(false);
-      setCurrentStatus('Error. Ready for new instructions.');
+    } finally {
+        setIsGenerating(false);
+        setCurrentStatus('Awaiting instructions...');
     }
   };
 
@@ -579,18 +575,18 @@ export default function AidePage() {
           isGenerating={isGenerating}
         />
         <main className="flex-grow flex min-h-0 border-t">
-           <ResizablePanelGroup direction="vertical">
-            <ResizablePanel defaultSize={65}>
-               <CodeEditorPanel
-                code={code}
-                onCodeChange={setCode}
-                boardInfo={boardInfo}
-              />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={35} minSize={20}>
-                <ResizablePanelGroup direction="horizontal">
-                    <ResizablePanel defaultSize={50} minSize={30}>
+           <ResizablePanelGroup direction="horizontal">
+            <ResizablePanel defaultSize={65} minSize={40}>
+                <ResizablePanelGroup direction="vertical">
+                    <ResizablePanel defaultSize={65}>
+                        <CodeEditorPanel
+                            code={code}
+                            onCodeChange={setCode}
+                            boardInfo={boardInfo}
+                        />
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel defaultSize={35} minSize={20}>
                         <AiControls
                             prompt={prompt}
                             setPrompt={setPrompt}
@@ -599,14 +595,14 @@ export default function AidePage() {
                             chatHistory={chatHistory}
                         />
                     </ResizablePanel>
-                    <ResizableHandle withHandle />
-                    <ResizablePanel defaultSize={50} minSize={30}>
-                       <IntelligencePanel
-                            visualizerHtml={visualizerHtml}
-                            compilationLogs={compilationLogs}
-                        />
-                    </ResizablePanel>
                 </ResizablePanelGroup>
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={35} minSize={30}>
+               <IntelligencePanel
+                    visualizerHtml={visualizerHtml}
+                    compilationLogs={compilationLogs}
+                />
             </ResizablePanel>
           </ResizablePanelGroup>
         </main>
@@ -627,5 +623,3 @@ export default function AidePage() {
     </TooltipProvider>
   );
 }
-
-    

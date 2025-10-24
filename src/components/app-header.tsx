@@ -7,9 +7,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PipelineStatus } from "@/lib/types";
-import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, LayoutDashboard, Cpu } from "lucide-react";
+import { ChevronDown, Cog, UploadCloud, ShieldCheck, Wifi, History, Rocket, LayoutDashboard, Cpu, MoreVertical } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { ESP32Svg } from './esp32-svg';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+
 
 interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   onManualAction: (step: keyof Omit<PipelineStatus, 'codeGen'> | 'testConnection') => void;
@@ -20,8 +22,8 @@ interface AppHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
 export default function AppHeader({ onManualAction, onShowHistory, isGenerating, className, ...props }: AppHeaderProps) {
   
   return (
-    <header className={cn("flex items-center justify-between p-2 border-b", className)} {...props}>
-        <div className="flex items-center gap-4">
+    <header className={cn("flex items-center justify-between px-3 py-2 border-b h-14", className)} {...props}>
+        <div className="flex items-center gap-2">
             <Link href="/" className="flex items-center gap-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -78,55 +80,68 @@ export default function AppHeader({ onManualAction, onShowHistory, isGenerating,
                 <h1 className="text-xl font-headline font-bold">AIoT Studio</h1>
             </Link>
         </div>
-        <div className="flex items-center gap-2">
-            <Button variant="outline" asChild>
-                <Link href="/dashboard">
-                    <LayoutDashboard className="mr-2 h-4 w-4" />
-                    Job Dashboard
-                </Link>
-            </Button>
-            <Button variant="outline" onClick={onShowHistory}>
-                <History className="mr-2 h-4 w-4" />
-                Version History
-            </Button>
-             <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Cpu className="mr-2 h-4 w-4" />
-                  Pinout
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-                <DialogHeader>
-                  <DialogTitle className="font-headline">ESP32 Pinout - Detailed View</DialogTitle>
-                </DialogHeader>
-                <div className="flex-grow min-h-0 flex items-center justify-center">
-                    <ESP32Svg className="max-w-full max-h-full object-contain" />
-                </div>
-              </DialogContent>
-            </Dialog>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" disabled={isGenerating}>
-                  Actions <ChevronDown className="ml-2 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                 <DropdownMenuItem onClick={() => onManualAction('testConnection')} disabled={isGenerating}>
-                  <Wifi className="mr-2 h-4 w-4" /> Test Connection
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/ota">
-                    <Rocket className="mr-2 h-4 w-4" />
-                    <span>Go to OTA Update</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onManualAction('compile')} disabled={isGenerating}>
-                  <Cog className="mr-2 h-4 w-4" /> Manually Compile
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        <div className="flex items-center gap-1">
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" asChild>
+                            <Link href="/dashboard">
+                                <LayoutDashboard className="h-5 w-5" />
+                                <span className="sr-only">Job Dashboard</span>
+                            </Link>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Job Dashboard</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" onClick={onShowHistory}>
+                            <History className="h-5 w-5" />
+                            <span className="sr-only">Version History</span>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Version History</p></TooltipContent>
+                </Tooltip>
+                 <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                        <Cpu className="h-5 w-5" />
+                        <span className="sr-only">Pinout</span>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-[90vw] md:max-w-4xl h-[90vh] flex flex-col">
+                    <DialogHeader>
+                      <DialogTitle className="font-headline">ESP32 Pinout - Detailed View</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-grow min-h-0 flex items-center justify-center p-4">
+                        <ESP32Svg className="max-w-full max-h-full object-contain" />
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={isGenerating}>
+                      <MoreVertical className="h-5 w-5" />
+                      <span className="sr-only">More Actions</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                     <DropdownMenuItem onClick={() => onManualAction('testConnection')} disabled={isGenerating}>
+                      <Wifi className="mr-2 h-4 w-4" /> Test Connection
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/ota">
+                        <Rocket className="mr-2 h-4 w-4" />
+                        <span>Go to OTA Update</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => onManualAction('compile')} disabled={isGenerating}>
+                      <Cog className="mr-2 h-4 w-4" /> Manually Compile
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+            </TooltipProvider>
         </div>
     </header>
   );
