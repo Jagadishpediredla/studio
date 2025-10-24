@@ -10,40 +10,32 @@ const CLIENT_USER_ID = 'user_123';
 const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export async function findActiveDesktopClient(): Promise<{ success: boolean, clientId?: string, error?: string }> {
-  const healthCheckRef = ref(database, `health_check/cloud-client_${Date.now()}`);
-  
   try {
-    // A quick write & remove to verify DB permissions and connection.
-    await set(healthCheckRef, { timestamp: serverTimestamp(), client: 'cloud-client' });
-    await remove(healthCheckRef);
-
     const desktopsRef = ref(database, 'desktops');
     const desktopsSnapshot = await get(desktopsRef);
     const desktops = desktopsSnapshot.val();
 
     if (!desktops) {
-      return { success: false, error: 'Connection to Firebase is OK, but no desktop clients are online. Please ensure the bridge is running.' };
+      return { success: false, error: 'No desktop clients are registered. Please ensure the bridge is running.' };
     }
 
+    const now = Date.now();
     const activeClients = Object.entries(desktops).filter(([_, info]: [string, any]) => {
       if (info.status !== 'online') return false;
       const lastSeen = info.lastSeen; // lastSeen is a server timestamp
-      return (Date.now() - lastSeen) < 30000; // 30 seconds as per docs
+      return (now - lastSeen) < 30000; // 30 seconds as per docs
     });
 
     if (activeClients.length === 0) {
-      return { success: false, error: 'Connection to Firebase is OK, but no active desktop clients were found. Check bridge status.' };
+      return { success: false, error: 'No active desktop clients found. Check bridge status and ensure it has checked in recently.' };
     }
 
     return { success: true, clientId: activeClients[0][0] };
 
   } catch (error: any) {
-    console.error('[CLOUD] Firebase Health Check Error:', error);
-    let errorMessage = `Failed to connect to Firebase or validate permissions. Check your connection, configuration, and database rules. Details: ${error.message}`;
+    console.error('[CLOUD] Firebase findActiveDesktopClient Error:', error);
+    let errorMessage = `Failed to connect to Firebase or read /desktops. Details: ${error.message}`;
     return { success: false, error: errorMessage };
-  } finally {
-    // Ensure cleanup even if other parts fail
-    await remove(healthCheckRef).catch(() => {});
   }
 }
 
@@ -57,7 +49,7 @@ export async function submitCompilationRequest(payload: { code: string; board: s
         code,
         board,
         libraries,
-        timestamp: serverTimestamp(),
+        timestamp: Date.now(), // As per demo script
         clientMetadata: {
           userId: CLIENT_USER_ID,
           source: 'web-app',
@@ -237,3 +229,5 @@ export async function getJobDetails(jobId: string): Promise<{ success: boolean; 
         return { success: false, error: error.message };
     }
 }
+
+    

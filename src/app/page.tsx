@@ -218,6 +218,7 @@ export default function Home() {
         const status: FirebaseStatusUpdate = snapshot.val();
         if (!status) return;
 
+        // As per demo, the first status update clears the timeout
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = undefined;
@@ -226,7 +227,7 @@ export default function Home() {
         if (!jobStateRef.current.logId && status.logId) {
             jobStateRef.current.logId = status.logId;
             jobStateRef.current.buildId = status.buildId;
-            const ackMsg = `[CLOUD] Desktop client acknowledged request. Received Log ID: ${status.logId}`;
+            const ackMsg = `[CLOUD] Desktop client acknowledged. Log ID: ${status.logId}`;
             addLog(ackMsg);
             
             // Per docs: Now that we have logId, write the client-side events
@@ -311,7 +312,6 @@ export default function Home() {
                 if (jobStateRef.current.logId) {
                     writeClientLog(jobStateRef.current.logId, 'timeout', 'Job timeout after 3 minutes');
                 } else {
-                     // If we don't even have a logId, we can't write a log.
                      console.error("Timeout occurred before logId was received.");
                 }
                 toast({ title: 'Job Timeout', description: errorMsg, variant: 'destructive' });
@@ -377,25 +377,28 @@ export default function Home() {
       
       addLog('[CLOUD] Code generation complete. Generating AI summary and visualization...', 'success');
       
-      // Fork off AI summary and visualization to run in parallel with compilation
       const aiEnrichmentPromise = (async () => {
-        const { html: newVisualizerHtml } = await generateVisualExplanation({ code: newCode });
-        setVisualizerHtml(newVisualizerHtml);
-        addLog('[CLOUD] AI Visualizer updated.', 'success');
-        
-        const { explanation } = await analyzeCodeForExplanation({ code: newCode });
-        addLog('[CLOUD] AI summary generated.', 'success');
+        try {
+          const { html: newVisualizerHtml } = await generateVisualExplanation({ code: newCode });
+          setVisualizerHtml(newVisualizerHtml);
+          addLog('[CLOUD] AI Visualizer updated.', 'success');
+          
+          const { explanation } = await analyzeCodeForExplanation({ code: newCode });
+          addLog('[CLOUD] AI summary generated.', 'success');
 
-        const currentHistoryItem: HistoryItem = { 
-          id: crypto.randomUUID(), 
-          code: newCode, 
-          board: newBoardInfo, 
-          visualizerHtml: newVisualizerHtml, 
-          timestamp: new Date(), 
-          prompt,
-          explanation,
-        };
-        setHistory(prev => [currentHistoryItem, ...prev]);
+          const currentHistoryItem: HistoryItem = { 
+            id: crypto.randomUUID(), 
+            code: newCode, 
+            board: newBoardInfo, 
+            visualizerHtml: newVisualizerHtml, 
+            timestamp: new Date(), 
+            prompt,
+            explanation,
+          };
+          setHistory(prev => [currentHistoryItem, ...prev]);
+        } catch (aiError: any) {
+            addLog(`[AI] Failed to generate enrichment: ${aiError.message}`, 'error');
+        }
       })();
       
       toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
@@ -403,13 +406,13 @@ export default function Home() {
       const submitTime = Date.now();
       const requestId = await runCompileStep(health.clientId);
       
-      await aiEnrichmentPromise;
-
       if (requestId) {
         monitorCompilationStatus(requestId, submitTime);
       } else {
         setIsGenerating(false);
       }
+      
+      await aiEnrichmentPromise;
 
     } catch (error: any) {
       console.error(error);
@@ -529,3 +532,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
