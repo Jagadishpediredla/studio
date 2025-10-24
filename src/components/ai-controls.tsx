@@ -18,7 +18,7 @@ interface AiControlsProps {
   onSendMessage: () => void;
   isGenerating: boolean;
   chatHistory: ChatMessage[];
-  onManualAction: (action: 'compile' | 'testConnection') => void;
+  onManualAction: (action: 'compile') => void;
 }
 
 export default function AiControls({ projectName, prompt, setPrompt, onSendMessage, isGenerating, chatHistory, onManualAction }: AiControlsProps) {

@@ -599,15 +599,15 @@ export default function AidePage() {
         <main className="flex-grow flex min-h-0">
            <ResizablePanelGroup direction="horizontal">
             <ResizablePanel defaultSize={50} minSize={30}>
-                <AiControls
-                    projectName={project.name}
-                    prompt={prompt}
-                    setPrompt={setPrompt}
-                    onSendMessage={handleSendMessage}
-                    isGenerating={isGenerating}
-                    chatHistory={chatHistory}
-                    onManualAction={(action) => handleManualAction(action as 'compile')}
-                />
+              <AiControls
+                  projectName={project.name}
+                  prompt={prompt}
+                  setPrompt={setPrompt}
+                  onSendMessage={handleSendMessage}
+                  isGenerating={isGenerating}
+                  chatHistory={chatHistory}
+                  onManualAction={(action) => handleManualAction(action as 'compile')}
+              />
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={50} minSize={30}>
