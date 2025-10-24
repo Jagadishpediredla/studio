@@ -32,6 +32,11 @@
         ".read": true,
         ".validate": "newData.hasChildren(['timestamp', 'client']) && newData.getPriority() === null"
       }
+    },
+    "projects": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": "name"
     }
   }
 }
