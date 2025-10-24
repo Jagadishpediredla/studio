@@ -3,15 +3,16 @@
 
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { generateCode } from '@/ai/flows/generate-code-from-prompt';
+import { aideChat } from '@/ai/flows/aide-chat-flow';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
 import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
 import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getBuildInfo, getBinary } from '@/app/actions';
 import type { PipelineStatus, HistoryItem, BoardInfo, PipelineStep, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo } from '@/lib/types';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off } from 'firebase/database';
+import { Tool as AITool } from 'genkit';
 
-import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from "react-resizable-panels";
+import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from "@/components/ui/resizable";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AppHeader from '@/components/app-header';
 import AiControls from '@/components/ai-controls';
@@ -46,10 +47,10 @@ const initialVisualizerHtml = `
 `;
 
 export default function AidePage() {
-  const [prompt, setPrompt] = useState<string>('Make the LED blink twice as fast');
+  const [prompt, setPrompt] = useState<string>('');
   const [code, setCode] = useState<string>(initialCode);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
-    { role: 'assistant', content: "Hello! I'm your AI pair programmer. I have context of this project. How can we improve it?" }
+    { role: 'assistant', content: "Hello! I'm your AI pair programmer, AIDE. I can write code, explain it, and compile it for you. How can I help?" }
   ]);
   const [boardInfo, setBoardInfo] = useState<BoardInfo>({ fqbn: 'esp32:esp32:esp32', libraries: [] });
   const [visualizerHtml, setVisualizerHtml] = useState<string>(initialVisualizerHtml);
@@ -90,6 +91,7 @@ export default function AidePage() {
             type,
             timestamp: new Date().toISOString(),
         };
+        // Avoid duplicate consecutive logs
         if (prev.length > 0 && prev[prev.length - 1].message === message) {
             return prev;
         }
@@ -128,7 +130,6 @@ export default function AidePage() {
     
     const build: BuildInfo = buildInfoResult.build;
 
-    // Determine the primary file to download (.bin or .hex)
     let primaryFile: { filename: string, downloadUrl?: string } | null = null;
     let fileType: 'bin' | 'hex' | 'elf' | undefined;
 
@@ -152,7 +153,6 @@ export default function AidePage() {
     
     const filename = primaryFile.filename;
 
-    // New GitHub Download Logic
     if (build.storage === 'github' && primaryFile.downloadUrl) {
         addLog(`[GITHUB] Downloading from GitHub: ${filename}`);
         const a = document.createElement('a');
@@ -162,7 +162,6 @@ export default function AidePage() {
         a.click();
         document.body.removeChild(a);
     } 
-    // Legacy Firebase Download Logic
     else {
         addLog(`[FIREBASE] Downloading from Firebase: ${filename}`);
         const result = await getBinary(buildId, fileType);
@@ -364,155 +363,150 @@ export default function AidePage() {
     });
   };
 
+  const handleExecuteTool = async (tool: AITool, toolInput: any) => {
+    if (tool.name === 'generateCode') {
+        updatePipeline('codeGen', 'processing');
+        addLog('[AIDE] Thinking... AI is analyzing your request and the current code.');
+        try {
+            const { code: newCode, board: newBoard, libraries: newLibraries } = tool.output as any;
+            const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
+            setCode(newCode);
+            setBoardInfo(newBoardInfo);
+            setChatHistory(prev => [...prev, { role: 'assistant', content: "OK, I've updated the code based on your request." }]);
+            updatePipeline('codeGen', 'completed');
+            addLog('[AIDE] Code generation complete. Generating AI summary and visualization...', 'success');
+            
+            toast({ title: 'Success', description: 'New code generated.' });
+
+            // Start AI enrichment in the background
+            const aiEnrichmentPromise = (async () => {
+                const historyId = crypto.randomUUID();
+                jobStateRef.current.historyId = historyId;
+
+                let visualizerHtmlResult = '<body>Visualizer failed to generate.</body>';
+                let explanationResult = 'AI summary failed to generate.';
+                
+                try {
+                    const { html } = await generateVisualExplanation({ code: newCode });
+                    visualizerHtmlResult = html;
+                    setVisualizerHtml(visualizerHtmlResult);
+                    addLog('[AIDE] AI Visualizer updated.', 'success');
+                } catch (visError: any) {
+                    addLog(`[AI] Visualizer failed: ${visError.message}`, 'error');
+                }
+                
+                try {
+                    const { explanation } = await analyzeCodeForExplanation({ code: newCode });
+                    explanationResult = explanation;
+                    addLog('[AIDE] AI summary generated.', 'success');
+                } catch (expError: any) {
+                    addLog(`[AI] Summary failed: ${expError.message}`, 'error');
+                }
+
+                const currentHistoryItem: HistoryItem = { 
+                    id: historyId, 
+                    code: newCode, 
+                    board: newBoardInfo, 
+                    visualizerHtml: visualizerHtmlResult, 
+                    timestamp: new Date(), 
+                    prompt: prompt, // use the captured user prompt
+                    explanation: explanationResult,
+                };
+                setHistory(prev => [currentHistoryItem, ...prev]);
+            })();
+
+            await aiEnrichmentPromise;
+
+        } catch (error: any) {
+            console.error(error);
+            const message = error.message || 'An error occurred during code generation.';
+            updatePipeline('codeGen', 'failed');
+            addLog(`[AIDE] Code Generation Failed: ${message}`, 'error');
+            setChatHistory(prev => [...prev, { role: 'assistant', content: `I ran into an error generating code: ${message}` }]);
+            toast({ title: 'Code Generation Failed', description: message, variant: 'destructive' });
+        }
+
+    } else if (tool.name === 'compileCode') {
+        setPipelineStatus({ serverCheck: 'pending', codeGen: 'completed', compile: 'pending', upload: 'pending', verify: 'pending' });
+        setCompilationLogs([]);
+        addLog('[AIDE] Starting compilation pipeline...');
+        
+        updatePipeline('serverCheck', 'processing');
+        addLog('[AIDE] Checking for online desktop clients...');
+        const health = await findActiveDesktopClient();
+
+        if (!health.success || !health.clientId) {
+            updatePipeline('serverCheck', 'failed');
+            const errorMessage = health.error || 'No online desktop clients found.';
+            addLog(`[AIDE] Error: ${errorMessage}`, 'error');
+            toast({ title: 'Health Check Failed', description: errorMessage, variant: 'destructive', duration: 20000 });
+            setChatHistory(prev => [...prev, { role: 'assistant', content: `I couldn't connect to a desktop client to start the compilation. ${errorMessage}` }]);
+            return;
+        }
+        updatePipeline('serverCheck', 'completed');
+        addLog(`[AIDE] Found online client: ${health.clientId}.`, 'success');
+
+        const submitTime = Date.now();
+        const requestId = await runCompileStep(health.clientId);
+        
+        if (requestId) {
+            monitorCompilationStatus(requestId, submitTime);
+        } else {
+             setIsGenerating(false);
+        }
+    }
+  }
+
+
   const handleSendMessage = async () => {
     if (!prompt.trim()) {
       toast({ title: 'Error', description: 'Message cannot be empty.', variant: 'destructive' });
       return;
     }
     
-    const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: prompt }];
-    setChatHistory(newHistory);
     const userPrompt = prompt;
+    const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: userPrompt }];
+    setChatHistory(newHistory);
     setPrompt('');
-
     setIsGenerating(true);
-    setPipelineStatus({ serverCheck: 'pending', codeGen: 'pending', compile: 'pending', upload: 'pending', verify: 'pending' });
-    setCompilationLogs([]);
-    const historyId = crypto.randomUUID();
-    jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: '', historyId };
-    
-    addLog('[AIDE] Starting pipeline...');
-    
-    updatePipeline('serverCheck', 'processing');
-    addLog('[AIDE] Checking for online desktop clients...');
-    const health = await findActiveDesktopClient();
-
-    if (!health.success || !health.clientId) {
-      updatePipeline('serverCheck', 'failed');
-      const errorMessage = health.error || 'No online desktop clients found.';
-      addLog(`[AIDE] Error: ${errorMessage}`, 'error');
-      toast({ title: 'Health Check Failed', description: errorMessage, variant: 'destructive', duration: 20000 });
-      setIsGenerating(false);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: `I couldn't connect to a desktop client. ${errorMessage}` }]);
-      return;
-    }
-    updatePipeline('serverCheck', 'completed');
-    addLog(`[AIDE] Found online client: ${health.clientId}.`, 'success');
-
-    updatePipeline('codeGen', 'processing');
-    addLog('[AIDE] Thinking... AI is analyzing your request and the current code.');
+    setCurrentStatus('AI is thinking...');
 
     try {
-      const fullPrompt = `You are an expert ESP32 Arduino pair programmer. Your task is to intelligently modify the user's existing code based on their latest request in our conversation.
+      const response = await aideChat({
+        history: chatHistory.map(m => ({ role: m.role, content: m.content })),
+        code,
+        prompt: userPrompt,
+      });
 
-Analyze the entire conversation history to understand the context and intent. Then, analyze the current code. Finally, generate the new, complete code block that implements the user's latest request, along with the correct board FQBN and any required libraries.
-
-Conversation History:
-${newHistory.map(m => `${m.role}: ${m.content}`).join('\n')}
-
-Current Code:
-\`\`\`cpp
-${code}
-\`\`\`
-
-User's Latest Request: "${userPrompt}"
-
-Generate the new, complete code block now.
-      `;
-
-      const { code: newCode, board: newBoard, libraries: newLibraries } = await generateCode({ prompt: fullPrompt });
-      const newBoardInfo = { fqbn: newBoard || 'esp32:esp32:esp32', libraries: newLibraries || [] };
-      setCode(newCode);
-      setBoardInfo(newBoardInfo);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: "OK, I've updated the code based on your request. I'm starting the build and deploy pipeline now." }]);
-      updatePipeline('codeGen', 'completed');
+      const hasToolChoice = response.toolRequest;
       
-      addLog('[AIDE] Code generation complete. Generating AI summary and visualization...', 'success');
-      
-      const aiEnrichmentPromise = (async () => {
-        let visualizerHtmlResult = '<body>Visualizer failed to generate.</body>';
-        let explanationResult = 'AI summary failed to generate.';
-        try {
-          const { html } = await generateVisualExplanation({ code: newCode });
-          visualizerHtmlResult = html;
-          setVisualizerHtml(visualizerHtmlResult);
-          addLog('[AIDE] AI Visualizer updated.', 'success');
-        } catch (visError: any) {
-          addLog(`[AI] Visualizer failed: ${visError.message}`, 'error');
-          console.error("Visualizer generation failed:", visError);
-        }
-        
-        try {
-           const { explanation } = await analyzeCodeForExplanation({ code: newCode });
-           explanationResult = explanation;
-           addLog('[AIDE] AI summary generated.', 'success');
-        } catch (expError: any) {
-          addLog(`[AI] Summary failed: ${expError.message}`, 'error');
-          console.error("Explanation generation failed:", expError);
-        }
-
-        const currentHistoryItem: HistoryItem = { 
-            id: historyId, 
-            code: newCode, 
-            board: newBoardInfo, 
-            visualizerHtml: visualizerHtmlResult, 
-            timestamp: new Date(), 
-            prompt: userPrompt,
-            explanation: explanationResult,
-        };
-        setHistory(prev => [currentHistoryItem, ...prev]);
-      })();
-      
-      toast({ title: 'Success', description: 'New code generated. Starting deployment pipeline...' });
-
-      const submitTime = Date.now();
-      const requestId = await runCompileStep(health.clientId);
-      
-      if (requestId) {
-        monitorCompilationStatus(requestId, submitTime);
+      if (hasToolChoice) {
+         setChatHistory(prev => [...prev, { role: 'assistant', content: `OK, I will do that. ${response.text() || ''}` }]);
+         await handleExecuteTool(hasToolChoice.tool as any, hasToolChoice.input);
       } else {
+        setChatHistory(prev => [...prev, { role: 'assistant', content: response.text() }]);
         setIsGenerating(false);
+        setCurrentStatus('Awaiting instructions...');
       }
-      
-      await aiEnrichmentPromise;
 
     } catch (error: any) {
       console.error(error);
-      const message = error.message || 'An error occurred during the pipeline.';
-      if (pipelineStatus.codeGen !== 'completed') {
-        updatePipeline('codeGen', 'failed');
-        addLog(`[AIDE] Pipeline Failed: ${message}`, 'error');
-        setChatHistory(prev => [...prev, { role: 'assistant', content: `I ran into an error: ${message}` }]);
-        toast({ title: 'Pipeline Failed', description: message, variant: 'destructive' });
-      } else {
-        // If code gen succeeded but a later step failed, the log is already handled elsewhere.
-        // We just need to stop the loading spinner.
-      }
+      const message = error.message || 'An error occurred while talking to the AI.';
+      setChatHistory(prev => [...prev, { role: 'assistant', content: `I ran into an error: ${message}` }]);
+      toast({ title: 'AI Error', description: message, variant: 'destructive' });
       setIsGenerating(false);
-      cleanupListeners();
+      setCurrentStatus('Error. Ready for new instructions.');
     }
   };
+
 
   const handleManualAction = async (step: keyof Omit<PipelineStatus, 'codeGen'> | 'testConnection') => {
     setIsGenerating(true);
     setCompilationLogs([]);
-    const historyId = crypto.randomUUID();
-    jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: '', historyId };
+    jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: '', historyId: crypto.randomUUID() };
 
     if (step === 'compile') {
-      const health = await findActiveDesktopClient();
-      if (!health.success || !health.clientId) {
-         toast({ title: 'No Clients Ready', description: health.error || 'No online desktop clients found.', variant: 'destructive' });
-         setIsGenerating(false);
-         return;
-      }
-      const submitTime = Date.now();
-      const requestId = await runCompileStep(health.clientId);
-      if (requestId) {
-        monitorCompilationStatus(requestId, submitTime);
-      } else {
-        setIsGenerating(false);
-      }
+        await handleExecuteTool({name: 'compileCode'} as any, {});
     } else if (step === 'testConnection') {
       const health = await findActiveDesktopClient();
       if (health.success && health.clientId) {
@@ -567,7 +561,7 @@ Generate the new, complete code block now.
         <main className="flex-grow flex min-h-0 border-t">
           <ResizablePanelGroup direction="vertical">
             <ResizablePanel defaultSize={65}>
-              <CodeEditorPanel
+               <CodeEditorPanel
                 code={code}
                 onCodeChange={setCode}
                 boardInfo={boardInfo}
