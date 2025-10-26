@@ -4,10 +4,11 @@
 import * as React from 'react';
 import { useRef, useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
-import { Code, BookOpen } from "lucide-react";
+import { Code, BookOpen, Download } from "lucide-react";
 import type { BoardInfo } from "@/lib/types";
 import AceEditor from "react-ace";
 import type { IAceEditor } from "react-ace/lib/types";
+import { Button } from './ui/button';
 
 import ace from "ace-builds";
 import "ace-builds/src-noconflict/mode-c_cpp";
@@ -28,10 +29,11 @@ ace.config.setModuleUrl(
 interface CodeEditorPanelProps extends React.HTMLAttributes<HTMLDivElement> {
   code: string;
   onCodeChange: (code: string) => void;
+  onDownloadCode: () => void;
   boardInfo: BoardInfo;
 }
 
-export default function CodeEditorPanel({ code, onCodeChange, boardInfo }: CodeEditorPanelProps) {
+export default function CodeEditorPanel({ code, onCodeChange, onDownloadCode, boardInfo }: CodeEditorPanelProps) {
   const editorRef = useRef<IAceEditor | null>(null);
 
   useEffect(() => {
@@ -59,6 +61,10 @@ export default function CodeEditorPanel({ code, onCodeChange, boardInfo }: CodeE
                 <Badge variant="outline">None</Badge>
               )}
             </div>
+             <Button variant="outline" size="sm" onClick={onDownloadCode}>
+                <Download className="mr-2 h-4 w-4" />
+                Download Code
+            </Button>
         </div>
       </header>
       <main className="flex-grow min-h-0">

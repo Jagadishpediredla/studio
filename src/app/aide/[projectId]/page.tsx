@@ -144,7 +144,7 @@ export default function AidePage() {
     a.href = downloadUrl;
     a.download = filename;
     document.body.appendChild(a);
-a.click();
+    a.click();
     document.body.removeChild(a);
 
     const successMsg = `Firmware "${filename}" downloaded successfully.`;
@@ -182,7 +182,7 @@ a.click();
     setIsGenerating(true);
 
     try {
-      const response = await aideChat({
+      const response: GenerateResponse = await aideChat({
         history: chatHistory.map(m => ({ role: m.role, content: m.content as string })),
         code,
         prompt: currentPrompt,
@@ -479,7 +479,7 @@ a.click();
     <TooltipProvider>
       <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
         <NavRail onNavAction={handleNavAction} />
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 pl-14">
           <header className="flex items-center justify-between p-3 border-b shrink-0">
             <h1 className="text-lg font-headline font-bold text-foreground">{project.name}</h1>
             <div className="flex items-center gap-4">
@@ -509,6 +509,7 @@ a.click();
                 <CodeEditorPanel
                       code={code}
                       onCodeChange={handleCodeChange}
+                      onDownloadCode={() => handleDownloadCode(code, new Date())}
                       boardInfo={boardInfo}
                   />
               </ResizablePanel>
@@ -539,5 +540,3 @@ a.click();
     </TooltipProvider>
   );
 }
-
-    
