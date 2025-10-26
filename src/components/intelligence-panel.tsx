@@ -2,17 +2,18 @@
 "use client";
 
 import * as React from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrainCircuit, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { StatusUpdate } from '@/lib/types';
+import type { StatusUpdate } from '@/app/aide/[projectId]/page';
 
 interface IntelligencePanelProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  defaultTab: 'logs' | 'visualizer';
+  activeTab: 'logs' | 'visualizer';
+  setActiveTab: (tab: 'logs' | 'visualizer') => void;
   visualizerHtml: string;
   compilationLogs: StatusUpdate[];
 }
@@ -20,7 +21,8 @@ interface IntelligencePanelProps {
 export default function IntelligencePanel({
   isOpen,
   onOpenChange,
-  defaultTab,
+  activeTab,
+  setActiveTab,
   visualizerHtml,
   compilationLogs,
 }: IntelligencePanelProps) {
@@ -35,25 +37,16 @@ export default function IntelligencePanel({
       <head>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
-          body { background-color: hsl(var(--background)); color: hsl(var(--foreground)); }
+          body { background-color: hsl(var(--background)); color: hsl(var(--foreground)); font-family: sans-serif; }
           :root {
             --background: 224 71.4% 4.1%;
             --foreground: 210 20% 98%;
           }
           /* Custom scrollbar for webkit browsers */
-          ::-webkit-scrollbar {
-            width: 8px;
-          }
-          ::-webkit-scrollbar-track {
-            background: #1a202c; /* dark-bg */
-          }
-          ::-webkit-scrollbar-thumb {
-            background: #4a5568; /* gray-600 */
-            border-radius: 4px;
-          }
-          ::-webkit-scrollbar-thumb:hover {
-            background: #718096; /* gray-500 */
-          }
+          ::-webkit-scrollbar { width: 8px; }
+          ::-webkit-scrollbar-track { background: #1a202c; }
+          ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 4px; }
+          ::-webkit-scrollbar-thumb:hover { background: #718096; }
         </style>
       </head>
       ${visualizerHtml}
@@ -75,15 +68,13 @@ export default function IntelligencePanel({
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-3xl w-full flex flex-col p-0" side="right">
         <div className="flex flex-col h-full bg-card">
-            <Tabs defaultValue={defaultTab} className="flex-grow flex flex-col min-h-0">
-                <SheetHeader className="p-4 border-b">
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="flex-grow flex flex-col min-h-0">
+                <SheetHeader className="p-4 border-b flex flex-row items-center justify-between">
                    <SheetTitle>Intelligence Panel</SheetTitle>
-                   <div className="flex items-center justify-end">
-                      <TabsList>
-                          <TabsTrigger value="logs"><Terminal className="mr-2"/>Logs</TabsTrigger>
-                          <TabsTrigger value="visualizer"><BrainCircuit className="mr-2"/>Visualizer</TabsTrigger>
-                      </TabsList>
-                   </div>
+                   <TabsList>
+                       <TabsTrigger value="logs"><Terminal className="mr-2"/>Logs</TabsTrigger>
+                       <TabsTrigger value="visualizer"><BrainCircuit className="mr-2"/>Visualizer</TabsTrigger>
+                   </TabsList>
                 </SheetHeader>
                 <TabsContent value="visualizer" className="flex-grow min-h-0 p-0 m-0">
                     <iframe
@@ -95,7 +86,7 @@ export default function IntelligencePanel({
                 </TabsContent>
                 <TabsContent value="logs" className="flex-grow min-h-0 m-0">
                    <ScrollArea className="h-full w-full">
-                      <div className="p-4 font-code text-xs bg-black h-full">
+                      <div className="p-4 font-code text-sm bg-black h-full">
                         {compilationLogs.length === 0 && <div className="text-muted-foreground">&gt; Awaiting logs...</div>}
                         {compilationLogs.map((log, index) => (
                           <div key={index} className={cn("whitespace-pre-wrap leading-relaxed", getLogColor(log.type))}>

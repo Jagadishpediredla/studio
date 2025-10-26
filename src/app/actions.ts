@@ -1,21 +1,18 @@
 
 'use server';
 
-import type { Project } from '@/lib/types';
+import type { Project, BuildInfo } from '@/lib/types';
 import { database } from '@/lib/firebase';
-import { ref, get, set, push, query } from 'firebase/database';
+import { ref, get, set, push } from 'firebase/database';
 
-const CLIENT_USER_ID = 'user_123'; 
-
-const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+const CLIENT_USER_ID = 'user_123';
+const COMPILATION_API_URL = process.env.COMPILATION_API_URL;
 
 // --- Project Actions ---
 
 export async function getProjects(): Promise<{ success: boolean; projects?: Project[]; error?: string }> {
   try {
     const projectsRef = ref(database, 'projects');
-    // REMOVED: query with orderByChild('name') to avoid indexing error.
-    // Sorting will be handled client-side.
     const snapshot = await get(projectsRef);
 
     const projectsData: { [key: string]: any } = snapshot.val() || {};
@@ -25,7 +22,6 @@ export async function getProjects(): Promise<{ success: boolean; projects?: Proj
       name: projectsData[id].name,
       createdAt: projectsData[id].createdAt,
       updatedAt: projectsData[id].updatedAt,
-      // The rest of the data is not needed for the project list
       code: '',
       chatHistory: [],
       versionHistory: [],
@@ -122,10 +118,8 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
         
         const updateData: { [key: string]: any } = { ...snapshot.val(), ...updates };
         
-        // Ensure updatedAt is always fresh
         updateData.updatedAt = new Date().toISOString();
 
-        // Convert Date objects in versionHistory to ISO strings for Firebase
         if (updates.versionHistory) {
             updateData.versionHistory = updates.versionHistory.map(v => ({
                 ...v,
@@ -143,130 +137,49 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
 }
 
 
-// --- Compilation Actions (unchanged from previous state, but included for completeness) ---
+// --- NEW Compilation Actions ---
 
-import type { BoardInfo, BuildInfo, JobSummary, JobStatistics, JobDetails, LogEvent, TimelineEvent } from '@/lib/types';
-import { child, remove, limitToLast } from 'firebase/database';
-
-export async function findActiveDesktopClient(): Promise<{ success: boolean, clientId?: string, error?: string }> {
-  try {
-    const desktopsRef = ref(database, 'desktops');
-    const desktopsSnapshot = await get(desktopsRef);
-    const desktops = desktopsSnapshot.val();
-
-    if (!desktops) {
-      return { success: false, error: 'No desktop clients are registered. Please ensure the bridge is running.' };
-    }
-
-    const now = Date.now();
-    const activeClients = Object.entries(desktops).filter(([_, info]: [string, any]) => {
-      if (info.status !== 'online') return false;
-      const lastSeen = info.lastSeen;
-      return (now - lastSeen) < 30000; // 30 seconds as per docs
-    });
-
-    if (activeClients.length === 0) {
-      return { success: false, error: 'No active desktop clients found. Check bridge status and ensure it has checked in recently.' };
-    }
-
-    return { success: true, clientId: activeClients[0][0] };
-
-  } catch (error: any) {
-    console.error('[CLOUD] Firebase findActiveDesktopClient Error:', error);
-    let errorMessage = `Failed to connect to Firebase or read /desktops. Details: ${error.message}`;
-    return { success: false, error: errorMessage };
-  }
-}
-
-export async function submitCompilationRequest(payload: { code: string; board: string; libraries: string[]; desktopId: string }) {
-  const { code, board, libraries, desktopId } = payload;
-  const requestId = generateRequestId();
+export async function compileCode(payload: { code: string; board: string; libraries: string[]; }) {
+  const { code, board, libraries } = payload;
   
   try {
-    const requestRef = ref(database, `requests/${desktopId}/${requestId}`);
-    await set(requestRef, {
-        code,
-        board,
-        libraries,
-        timestamp: Date.now(), // As per demo script
-        clientMetadata: {
-          userId: CLIENT_USER_ID,
-          source: 'web-app',
-        }
+    const response = await fetch(`${COMPILATION_API_URL}/api/compile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, board, libraries })
     });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+        throw new Error(data.error || 'Compilation request failed');
+    }
 
-    return { success: true, requestId };
+    return { success: true, ...data };
 
   } catch (error: any) {
-    return { success: false, error: `[CLOUD] Failed to submit compilation request to Firebase: ${error.message}` };
+    console.error('[COMPILER] API Error:', error);
+    return { success: false, error: error.message };
   }
 }
 
-export async function writeClientLog(logId: string, event: string, message: string, data: object = {}) {
-    if (!logId) {
-        console.warn(`[CLOUD] Attempted to write log but logId is missing. Event: ${event}`);
-        return { success: false, error: "logId is missing" };
-    }
-    const timestamp = Date.now();
+export async function getJobStatus(jobId: string) {
     try {
-        const logRef = ref(database, `logs/${logId}`);
+        const response = await fetch(`${COMPILATION_API_URL}/api/job/${jobId}`);
+        const data = await response.json();
 
-        const clientEventsRef = child(logRef, 'clientSide/events');
-        await push(clientEventsRef, {
-            timestamp,
-            event,
-            message,
-            data
-        });
-
-        const timelineRef = child(logRef, 'timeline');
-        await push(timelineRef, {
-            timestamp,
-            source: 'client',
-            event,
-            message
-        });
-
-        const updatedAtRef = child(logRef, 'updatedAt');
-        await set(updatedAtRef, timestamp);
+        if (!response.ok) {
+            throw new Error(data.error || `Failed to get status for job ${jobId}`);
+        }
         
-        return { success: true };
-    } catch (error: any) {
-        console.error(`[CLOUD] Failed to write client log to Firebase: ${error.message}`);
+        return { success: true, ...data };
+    } catch(error: any) {
+        console.error(`[COMPILER] Job Status Error for ${jobId}:`, error);
         return { success: false, error: error.message };
     }
 }
 
-export async function getBuildInfo(buildId: string): Promise<{ success: boolean; build?: BuildInfo; error?: string }> {
-    try {
-        const buildRef = ref(database, `builds/${buildId}`);
-        const snapshot = await get(buildRef);
-        const buildData = snapshot.val();
-
-        if (!buildData) {
-            return { success: false, error: `Build metadata not found in Firebase for buildId: ${buildId}` };
-        }
-        return { success: true, build: buildData as BuildInfo };
-    } catch (error: any) {
-        return { success: false, error: `Error fetching build info from Firebase: ${error.message}` };
-    }
-}
-
-export async function getBinary(buildId: string, fileType: 'hex' | 'bin' | 'elf' = 'bin') {
-    try {
-        const binaryRef = ref(database, `binaries/${buildId}/${fileType}`);
-        const snapshot = await get(binaryRef);
-        const data = snapshot.val();
-        
-        if (!data || !data.binary) {
-            return { success: false, error: `Binary for file type '${fileType}' not found in database for buildId: ${buildId}.`};
-        }
-        
-        return { success: true, binary: data.binary, filename: data.filename, size: data.size };
-    } catch (error: any) {
-        return { success: false, error: `Error fetching binary from Firebase: ${error.message}`};
-    }
-}
+// --- Old Firebase compilation actions are now removed ---
 
 export async function performOtaUpdate(
   firmwareFile: string,
@@ -290,74 +203,3 @@ export async function performOtaUpdate(
 
   onProgress({ progress: 100, message: 'Update successful!', status: 'success' });
 }
-
-
-export async function getJobs(
-  limit: number = 50, 
-  statusFilter?: string, 
-  userIdFilter?: string
-): Promise<{ success: boolean; jobs?: JobSummary[], statistics?: JobStatistics, error?: string }> {
-    try {
-        const logsRef = ref(database, 'logs');
-        const jobsQuery = query(logsRef, limitToLast(limit));
-        
-        const snapshot = await get(jobsQuery);
-        const allLogsData = snapshot.val() || {};
-        
-        let allJobs: JobDetails[] = Object.values(allLogsData);
-
-        if (userIdFilter) {
-            allJobs = allJobs.filter(job => job.clientSide?.userId === userIdFilter);
-        }
-        if (statusFilter) {
-            allJobs = allJobs.filter(job => job.status === statusFilter);
-        }
-
-        const jobSummaries: JobSummary[] = allJobs.map((log: JobDetails) => ({
-            jobId: log.logId,
-            status: log.status,
-            createdAt: new Date(log.createdAt).toISOString(),
-            requestId: log.requestId,
-            buildId: log.buildId,
-            duration: log.clientSide?.metrics?.totalWaitTime,
-        }));
-
-        jobSummaries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-        const completedJobs = allJobs.filter(j => j.status === 'completed');
-        const totalDuration = completedJobs.reduce((sum, job) => sum + (job.clientSide?.metrics?.totalWaitTime || 0), 0);
-
-        const statistics: JobStatistics = {
-            totalJobs: allJobs.length,
-            completedJobs: completedJobs.length,
-            failedJobs: allJobs.filter(j => j.status === 'failed').length,
-            averageDuration: completedJobs.length > 0 ? totalDuration / completedJobs.length : 0,
-        };
-
-        return { success: true, jobs: jobSummaries, statistics };
-
-    } catch (error: any) {
-        console.error("Failed to fetch jobs from /logs:", error);
-        return { success: false, error: error.message };
-    }
-}
-
-export async function getJobDetails(jobId: string): Promise<{ success: boolean; job?: JobDetails; error?: string }> {
-    try {
-        const jobRef = ref(database, `logs/${jobId}`);
-        const snapshot = await get(jobRef);
-        const jobData = snapshot.val();
-
-        if (!jobData) {
-            return { success: false, error: `Job log with ID ${jobId} not found.` };
-        }
-        
-        return { success: true, job: jobData as JobDetails };
-
-    } catch (error: any) {
-        console.error(`Failed to fetch details for job log ${jobId}:`, error);
-        return { success: false, error: error.message };
-    }
-}
-
-    

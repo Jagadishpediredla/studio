@@ -5,10 +5,8 @@ import * as React from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { aideChat } from '@/ai/flows/aide-chat-flow.ts';
-import { findActiveDesktopClient, submitCompilationRequest, writeClientLog, getBuildInfo, getBinary, getProject, updateProject } from '@/app/actions';
-import type { HistoryItem, FirebaseStatusUpdate, StatusUpdate, ChatMessage, BuildInfo, Project } from '@/lib/types';
-import { database } from '@/lib/firebase';
-import { ref, onValue, off } from 'firebase/database';
+import { getProject, updateProject, compileCode, getJobStatus } from '@/app/actions';
+import type { HistoryItem, ChatMessage, Project, BuildInfo } from '@/lib/types';
 import { type ToolRequestPart, type GenerateResponse } from 'genkit';
 import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
@@ -22,7 +20,15 @@ import CodeEditorPanel from '@/components/code-editor-panel';
 import IntelligencePanel from '@/components/intelligence-panel';
 import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
-import { Loader2 } from 'lucide-react';
+import { Loader2, BrainCircuit, Terminal } from 'lucide-react';
+import StatusIndicator from '@/components/status-indicator';
+
+export type StatusUpdate = {
+    timestamp: string;
+    message: string;
+    type: 'info' | 'success' | 'error';
+    progress?: number;
+};
 
 export default function AidePage() {
   const params = useParams();
@@ -37,20 +43,17 @@ export default function AidePage() {
   const [isIntelligencePanelOpen, setIsIntelligencePanelOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'logs' | 'visualizer'>('logs');
 
-  
   const [isGenerating, setIsGenerating] = useState(false);
   const [compilationLogs, setCompilationLogs] = useState<StatusUpdate[]>([]);
+  const [isCompiling, setIsCompiling] = useState(false);
+
   const { toast } = useToast();
   
   const jobStateRef = useRef({
-    requestId: '',
-    logId: '',
-    buildId: '',
-    lastStatus: '',
+    jobId: '',
     historyId: '',
+    statusPoller: undefined as NodeJS.Timeout | undefined,
   });
-  const statusListenerUnsubscribeRef = useRef<() => void>();
-  const timeoutRef = useRef<NodeJS.Timeout>();
 
   // Derived state, with fallbacks for loading state
   const code = project?.code ?? '';
@@ -58,16 +61,12 @@ export default function AidePage() {
   const boardInfo = project?.boardInfo ?? { fqbn: 'esp32:esp32:esp32', libraries: [] };
   const versionHistory = project?.versionHistory ?? [];
   const visualizerHtml = project?.versionHistory?.[0]?.visualizerHtml ?? '<body>No visualization available yet.</body>';
+  const lastLogMessage = compilationLogs.length > 0 ? compilationLogs[compilationLogs.length-1].message : "Ready";
 
-
-  const cleanupListeners = useCallback(() => {
-    if (statusListenerUnsubscribeRef.current) {
-        statusListenerUnsubscribeRef.current();
-        statusListenerUnsubscribeRef.current = undefined;
-    }
-    if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = undefined;
+  const cleanupPoller = useCallback(() => {
+    if (jobStateRef.current.statusPoller) {
+        clearInterval(jobStateRef.current.statusPoller);
+        jobStateRef.current.statusPoller = undefined;
     }
   }, []);
 
@@ -91,8 +90,8 @@ export default function AidePage() {
 
     loadProjectData();
     
-    return () => cleanupListeners();
-  }, [projectId, router, toast, cleanupListeners]);
+    return () => cleanupPoller();
+  }, [projectId, router, toast, cleanupPoller]);
 
   const updateProjectData = useCallback(async (updates: Partial<Omit<Project, 'id'>>) => {
       if (!projectId) return;
@@ -110,11 +109,12 @@ export default function AidePage() {
       
   }, [projectId, toast]);
   
-  const addLog = (message: string, type: StatusUpdate['type'] = 'info') => {
+  const addLog = (message: string, type: StatusUpdate['type'] = 'info', progress?: number) => {
     setCompilationLogs(prev => {
         const newLog: StatusUpdate = {
             message,
             type,
+            progress,
             timestamp: new Date().toISOString(),
         };
         // Simple check to avoid duplicate consecutive logs
@@ -125,122 +125,33 @@ export default function AidePage() {
     });
   };
   
-  const handleFirmwareDownload = async (buildId: string, historyId?: string): Promise<{ success: boolean, filename?: string, fileType?: string }> => {
-    addLog(`[CLOUD] Build complete. Requesting binary for build ${buildId}...`);
+  const handleFirmwareDownload = async (result: any) => {
+    addLog(`[APP] Build complete. Downloading binary...`);
+
+    const downloadUrl = process.env.NEXT_PUBLIC_COMPILATION_API_URL + result.downloads.bin;
+    const filename = result.downloads.bin.split('/').pop();
     
-    const buildInfoResult = await getBuildInfo(buildId);
-
-    if (!buildInfoResult.success || !buildInfoResult.build) {
-      const errorMsg = `Download Failed: ${buildInfoResult.error || 'Could not retrieve build metadata.'}`;
-      addLog(`[CLOUD] ${errorMsg}`, 'error');
-      toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
-      return { success: false };
-    }
-    
-    const build: BuildInfo = buildInfoResult.build;
-
-    let primaryFile: { filename: string, downloadUrl?: string } | null = null;
-    let fileType: 'bin' | 'hex' | 'elf' | undefined;
-
-    if (build.files?.bin) {
-        primaryFile = build.files.bin;
-        fileType = 'bin';
-    } else if (build.files?.hex) {
-        primaryFile = build.files.hex;
-        fileType = 'hex';
-    } else if (build.files?.elf) {
-        primaryFile = build.files.elf;
-        fileType = 'elf';
-    }
-
-    if (!primaryFile || !fileType) {
-        const errorMsg = `Download Failed: No downloadable files (.bin, .hex) found in build metadata.`;
-        addLog(`[CLOUD] ${errorMsg}`, 'error');
-        toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
-        return { success: false };
-    }
-    
-    const filename = primaryFile.filename;
-
-    if (build.storage === 'github' && primaryFile.downloadUrl) {
-        addLog(`[GITHUB] Downloading from GitHub: ${filename}`);
-        const a = document.createElement('a');
-        a.href = primaryFile.downloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    } 
-    else {
-        addLog(`[FIREBASE] Downloading from Firebase: ${filename}`);
-        const result = await getBinary(buildId, fileType);
-        if (!result.success || !result.binary) {
-          const errorMsg = `Download Failed: ${result.error || 'No binary data found.'}`;
-          addLog(`[CLOUD] ${errorMsg}`, 'error');
-          toast({ title: 'Download Failed', description: errorMsg, variant: 'destructive' });
-          return { success: false };
-        }
-        const byteCharacters = atob(result.binary);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+a.click();
+    document.body.removeChild(a);
 
     const successMsg = `Firmware "${filename}" downloaded successfully.`;
-    addLog(`[CLOUD] ${successMsg}`, 'success');
-    if (jobStateRef.current.logId) {
-      await writeClientLog(jobStateRef.current.logId, 'binaries_downloaded', 'All binaries downloaded from Firebase', { fileCount: 1, filename: filename });
-    }
+    addLog(`[APP] ${successMsg}`, 'success');
     toast({ title: 'Success', description: successMsg });
 
-    if (historyId) {
+    if (jobStateRef.current.historyId) {
       const newVersionHistory = versionHistory.map(item => 
-        item.id === historyId 
-        ? { ...item, buildId, binary: { filename, fileType: fileType! } } 
+        item.id === jobStateRef.current.historyId 
+        ? { ...item, buildId: result.build.buildId, binary: { filename, fileType: 'bin' } } 
         : item
       );
       updateProjectData({ versionHistory: newVersionHistory });
     }
     
-    return { success: true, filename, fileType };
-  };
-
-
-  const runCompileStep = async (desktopId: string): Promise<string | null> => {
-    addLog(`[CLOUD] Submitting job to desktop client '${desktopId}'...`);
-    
-    const payload = { code, board: boardInfo.fqbn, libraries: boardInfo.libraries, desktopId };
-    
-    const result = await submitCompilationRequest(payload);
-
-    if (result.success && result.requestId) {
-      jobStateRef.current.requestId = result.requestId;
-      const firebaseLogMsg = `[FIREBASE] Wrote to /requests/${desktopId}/${result.requestId}`;
-      addLog(firebaseLogMsg, 'success');
-      addLog(`[CLOUD] Job submitted with ID: ${result.requestId}. Waiting for acknowledgment...`);
-      return result.requestId;
-    } else {
-      const errorMessage = result.error || 'Failed to start compilation job via Firebase.';
-      addLog(`[CLOUD] Error: ${errorMessage}`, 'error');
-      toast({ 
-        title: 'Compilation Failed', 
-        description: errorMessage, 
-        variant: 'destructive',
-        duration: 20000,
-      });
-      return null;
-    }
+    return { success: true, filename, fileType: 'bin' };
   };
 
   const handleSendMessage = useCallback(async (overridePrompt?: string) => {
@@ -268,14 +179,14 @@ export default function AidePage() {
         prompt: currentPrompt,
       });
 
-      let responseText = '';
+      let responseText = response.text();
+
       if (response.candidates[0].message.content) {
         for (const part of response.candidates[0].message.content) {
-          if (part.text) {
-            responseText += part.text;
-          } else if (part.toolRequest) {
-            executeTool(part, newChatHistory); 
-          }
+            if (part.toolRequest) {
+                await executeTool(part, newChatHistory); 
+                responseText = ''; // Don't double-post if a tool was used
+            }
         }
       }
       
@@ -291,102 +202,65 @@ export default function AidePage() {
       updateProjectData({ chatHistory: newHistory });
       toast({ title: 'AI Error', description: message, variant: 'destructive' });
     } finally {
-        if (!jobStateRef.current.requestId) {
-          setIsGenerating(false);
-        }
+      if (!isCompiling) {
+        setIsGenerating(false);
+      }
     }
-  }, [project, prompt, chatHistory, code, updateProjectData, toast]);
+  }, [project, prompt, chatHistory, code, isCompiling, updateProjectData, toast]);
 
 
-  const monitorCompilationStatus = useCallback((requestId: string, submitTime: number) => {
-    cleanupListeners();
+  const monitorCompilationStatus = useCallback((jobId: string) => {
+    cleanupPoller();
+    setIsCompiling(true);
+    setIsGenerating(true);
     setIsIntelligencePanelOpen(true);
     setActiveTab('logs');
 
-    const statusRef = ref(database, `status/${requestId}`);
-    addLog(`[CLOUD] Listening to Firebase: /status/${requestId}`);
-    
-    const onStatusUpdate = async (snapshot: any) => {
-        const status: FirebaseStatusUpdate = snapshot.val();
-        if (!status) return;
+    jobStateRef.current.statusPoller = setInterval(async () => {
+        const statusResult = await getJobStatus(jobId);
 
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = undefined;
+        if(!statusResult.success) {
+            addLog(`[APP] Error polling status: ${statusResult.error}`, 'error');
+            return;
         }
 
-        if (!jobStateRef.current.logId && status.logId) {
-            jobStateRef.current.logId = status.logId;
-            jobStateRef.current.buildId = status.buildId;
-            addLog(`[CLOUD] Desktop client acknowledged. Log ID: ${status.logId}`);
-            
-            await writeClientLog(status.logId, 'request_submitted', 'Compilation request submitted by client', { codeLength: code.length, board: boardInfo.fqbn });
-            await writeClientLog(status.logId, 'acknowledgment_received', 'Desktop client acknowledged request', { responseTime: Date.now() - submitTime, clientId: status.clientId });
-        }
+        addLog(`[COMPILER] ${statusResult.status} (${statusResult.progress || 0}%)`, 'info', statusResult.progress);
         
-        if (status.status !== jobStateRef.current.lastStatus && jobStateRef.current.logId) {
-            jobStateRef.current.lastStatus = status.status;
-             await writeClientLog(jobStateRef.current.logId, `status_update_${status.status}`, `Status: ${status.message}`, { progress: status.progress, iteration: status.iteration, elapsedTime: status.elapsedTime });
-        }
-
-        addLog(`[DESKTOP] [${status.phase}] ${status.status} (${status.progress}%) - ${status.message}`, status.status === 'failed' ? 'error' : 'info');
-
-        if (status.status === 'completed') {
-            cleanupListeners();
-            addLog('[DESKTOP] Compilation successful. Fetching build information...', 'success');
-            
-            const buildId = jobStateRef.current.buildId || status.buildId;
-            if (buildId) {
-              if (jobStateRef.current.logId) {
-                await writeClientLog(jobStateRef.current.logId, 'job_completed', 'Job completed successfully on desktop client');
-              }
-              await handleFirmwareDownload(buildId, jobStateRef.current.historyId);
+        if (statusResult.isCompleted) {
+            cleanupPoller();
+            if (statusResult.build) {
+                addLog('[APP] Compilation successful. Fetching build information...', 'success');
+                await handleFirmwareDownload(statusResult);
             } else {
-               addLog(`[CLOUD] Error: Compilation completed but no buildId was found.`, 'error');
-               toast({ title: 'Build Info Failed', description: 'Compilation completed but no buildId was found.', variant: 'destructive' });
+                 addLog(`[APP] Error: Compilation completed but no build info was returned.`, 'error');
+                 toast({ title: 'Build Failed', description: 'Compilation completed but no build info was returned.', variant: 'destructive' });
             }
+            setIsCompiling(false);
             setIsGenerating(false);
 
-        } else if (status.status === 'failed') {
-            cleanupListeners();
+        } else if (statusResult.isFailed) {
+            cleanupPoller();
+            const errorMessage = statusResult.error || "Compilation failed with an unknown error.";
             const errorDescription = (
                 <div>
                     <p className="font-semibold">Compilation failed. Retrying with AI...</p>
                     <pre className="mt-2 w-full rounded-md bg-destructive/20 p-4 text-destructive-foreground whitespace-pre-wrap font-code text-xs">
-                        {status.message}
+                        {errorMessage}
                     </pre>
                 </div>
             );
 
-            if (jobStateRef.current.logId) {
-              await writeClientLog(jobStateRef.current.logId, 'job_failed', 'Job failed on desktop client', { error: status.message, errorDetails: status.errorDetails });
-            }
             toast({ title: 'Compilation Failed', description: errorDescription, variant: 'destructive', duration: 10000 });
             
-            const retryPrompt = `The compilation failed with the following error. Please analyze this error, fix the code, and then start the compilation again. Error: \n\n${status.message}`;
+            const retryPrompt = `The compilation failed with the following error. Please analyze this error, fix the code, and then start the compilation again. Error: \n\n${errorMessage}`;
             addLog('[AIDE] Compilation failed. Asking AI to fix the code...', 'error');
             handleSendMessage(retryPrompt);
+            setIsCompiling(false);
+            // isGenerating remains true for the AI fix
         }
-    };
-    
-    statusListenerUnsubscribeRef.current = onValue(statusRef, onStatusUpdate, (error) => {
-        cleanupListeners();
-        addLog(`[FIREBASE] Error: Firebase listener error: ${error.message}`, 'error');
-        toast({ title: 'Real-time Error', description: `Firebase listener error: ${error.message}`, variant: 'destructive' });
-        setIsGenerating(false);
-    });
+    }, 2000); // Poll every 2 seconds
 
-    timeoutRef.current = setTimeout(() => {
-        cleanupListeners();
-        const errorMsg = 'Job timed out after 3 minutes. The desktop client did not respond or complete in time.';
-        addLog(`[CLOUD] Error: ${errorMsg}`, 'error');
-        if (jobStateRef.current.logId) {
-            writeClientLog(jobStateRef.current.logId, 'timeout', 'Job timeout after 3 minutes');
-        }
-        toast({ title: 'Job Timeout', description: errorMsg, variant: 'destructive' });
-        setIsGenerating(false);
-    }, 180000);
-  }, [cleanupListeners, code.length, boardInfo, handleSendMessage, toast]);
+  }, [cleanupPoller, handleSendMessage, toast]);
   
 
   const executeTool = async (toolRequest: ToolRequestPart, currentChatHistory: ChatMessage[]) => {
@@ -443,27 +317,23 @@ export default function AidePage() {
             setIsIntelligencePanelOpen(true);
             setActiveTab('logs');
             
-            addLog('[AIDE] Checking for online desktop clients...');
-            const health = await findActiveDesktopClient();
+            const payload = { code, board: boardInfo.fqbn, libraries: boardInfo.libraries };
+            addLog(`[APP] Submitting job to cloud compiler...`);
 
-            if (!health.success || !health.clientId) {
-                const errorMessage = health.error || 'No online desktop clients found.';
-                addLog(`[AIDE] Error: ${errorMessage}`, 'error');
-                toast({ title: 'Health Check Failed', description: errorMessage, variant: 'destructive', duration: 20000 });
-                return { success: false, message: `I couldn't connect to a desktop client. ${errorMessage}` };
-            }
+            const result = await compileCode(payload);
 
-            addLog(`[AIDE] Found online client: ${health.clientId}.`, 'success');
-
-            const submitTime = Date.now();
-            const requestId = await runCompileStep(health.clientId);
-            
-            if (requestId) {
-                monitorCompilationStatus(requestId, submitTime);
-                return { success: true, message: 'Compilation started.' };
+            if (result.success && result.jobId) {
+              jobStateRef.current.jobId = result.jobId;
+              addLog(`[APP] Job submitted with ID: ${result.jobId}. Waiting for status updates...`, 'success');
+              monitorCompilationStatus(result.jobId);
+              return { success: true, message: 'Compilation started.' };
             } else {
-                setIsGenerating(false);
-                return { success: false, message: 'Failed to submit compilation request.' };
+              const errorMessage = result.error || 'Failed to start compilation job.';
+              addLog(`[APP] Error: ${errorMessage}`, 'error');
+              toast({ title: 'Compilation Failed', description: errorMessage, variant: 'destructive'});
+              setIsCompiling(false);
+              setIsGenerating(false);
+              return { success: false, message: `I couldn't start the compilation. ${errorMessage}` };
             }
         },
         analyzeCode: async (input) => {
@@ -522,26 +392,16 @@ export default function AidePage() {
     }
   };
 
+  const handleNavAction = (action: 'showHistory' | 'showIntelligence') => {
+    if (action === 'showHistory') setIsHistoryOpen(true);
+    if (action === 'showIntelligence') setIsIntelligencePanelOpen(true);
+  }
 
-  const handleManualAction = async (action: 'compile' | 'showHistory' | 'showIntelligencePanel') => {
-    if (action === 'showHistory') {
-        setIsHistoryOpen(true);
-        return;
-    }
-    if (action === 'showIntelligencePanel') {
-        setIsIntelligencePanelOpen(true);
-        return;
-    }
-    
+  const handleManualCompile = async () => {
     setIsGenerating(true);
     setCompilationLogs([]);
-    jobStateRef.current = { requestId: '', logId: '', buildId: '', lastStatus: '', historyId: crypto.randomUUID() };
-
-    if (action === 'compile') {
-        await executeTool({ toolRequest: { name: 'compileCode', input: {} } } as any, chatHistory);
-    } else {
-        setIsGenerating(false);
-    }
+    jobStateRef.current = { jobId: '', historyId: crypto.randomUUID(), statusPoller: undefined };
+    await executeTool({ toolRequest: { name: 'compileCode', input: {} } } as any, chatHistory);
   }
 
   const handleRestoreFromHistory = (item: HistoryItem) => {
@@ -569,9 +429,7 @@ export default function AidePage() {
 
   const handleDownloadBinary = async (buildId: string) => {
     if (!buildId) return;
-    setIsGenerating(true); 
-    await handleFirmwareDownload(buildId);
-    setIsGenerating(false);
+    toast({ title: "Not implemented", description: "This will be implemented soon!"});
   }
   
   const handleCodeChange = (newCode: string) => {
@@ -594,7 +452,7 @@ export default function AidePage() {
   return (
     <TooltipProvider>
       <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
-        <NavRail onManualAction={handleManualAction} />
+        <NavRail onNavAction={handleNavAction} />
         <main className="flex-grow flex min-h-0">
            <ResizablePanelGroup direction="horizontal">
             <ResizablePanel defaultSize={50} minSize={30}>
@@ -603,9 +461,15 @@ export default function AidePage() {
                   prompt={prompt}
                   setPrompt={setPrompt}
                   onSendMessage={handleSendMessage}
-                  isGenerating={isGenerating}
+                  isGenerating={isGenerating || isCompiling}
                   chatHistory={chatHistory}
-                  onManualAction={(action) => handleManualAction(action as 'compile')}
+                  onManualCompile={handleManualCompile}
+                  statusIndicator={
+                    <StatusIndicator 
+                        isProcessing={isCompiling}
+                        statusMessage={lastLogMessage}
+                    />
+                  }
               />
             </ResizablePanel>
             <ResizableHandle withHandle />
@@ -632,7 +496,8 @@ export default function AidePage() {
         <IntelligencePanel
             isOpen={isIntelligencePanelOpen}
             onOpenChange={setIsIntelligencePanelOpen}
-            defaultTab={activeTab}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
             visualizerHtml={visualizerHtml}
             compilationLogs={compilationLogs}
         />

@@ -3,22 +3,22 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Home, LayoutDashboard, Settings, History, Bot, TestTubeDiagonal } from "lucide-react";
+import { Home, LayoutDashboard, Settings, History, Bot, BrainCircuit, Terminal } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavRailProps {
-    onManualAction: (action: 'showHistory' | 'showIntelligencePanel') => void;
+    onNavAction: (action: 'showHistory' | 'showIntelligence') => void;
 }
 
 const navItems = [
     { href: "/", icon: Home, label: "Projects" },
     { href: "/dashboard", icon: LayoutDashboard, label: "Job Dashboard" },
     { action: "showHistory", icon: History, label: "Version History" },
-    { action: "showIntelligencePanel", icon: TestTubeDiagonal, label: "Intelligence Panel" },
+    { action: "showIntelligence", icon: BrainCircuit, label: "Intelligence Panel" },
     { href: "/settings", icon: Settings, label: "AI Settings" },
 ];
 
-export default function NavRail({ onManualAction }: NavRailProps) {
+export default function NavRail({ onNavAction }: NavRailProps) {
     
     return (
         <aside className="h-full bg-card border-r flex flex-col items-center justify-between p-2">
@@ -37,7 +37,7 @@ export default function NavRail({ onManualAction }: NavRailProps) {
                                         <span className="sr-only">{item.label}</span>
                                     </Link>
                                 ) : (
-                                    <button onClick={() => onManualAction(item.action as any)} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground hover:bg-muted">
+                                    <button onClick={() => onNavAction(item.action as any)} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground hover:bg-muted">
                                         <item.icon className="h-5 w-5" />
                                         <span className="sr-only">{item.label}</span>
                                     </button>

@@ -1,15 +1,5 @@
 
 
-export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
-
-export type PipelineStatus = {
-  serverCheck: PipelineStep;
-  codeGen: PipelineStep;
-  compile: PipelineStep;
-  upload: PipelineStep;
-  verify: PipelineStep;
-};
-
 export type BoardInfo = {
   fqbn: string;
   libraries: string[];
@@ -35,45 +25,20 @@ export type HistoryItem = {
   };
 };
 
-export interface StatusUpdate {
-  timestamp: string; // ISO 8601 string
-  message: string;
-  type: 'info' | 'success' | 'error';
-}
-
-export interface FirebaseStatusUpdate {
-  status: 'acknowledged' | 'preparing' | 'installing_libraries' | 'compiling' | 'uploading' | 'completed' | 'failed';
-  message: string;
-  progress: number;
-  timestamp: number;
-  serverTimestamp: number;
-  phase: string;
-  elapsedTime: number;
-  iteration: number;
-  logId: string;
-  buildId: string;
-  clientId: string;
-  errorDetails?: object;
-}
-
 export interface BuildInfo {
     buildId: string;
-    requestId: string;
-    board: string;
-    status: 'completed' | 'failed';
-    storage?: 'github' | 'firebase';
-    github?: {
-        repo: string;
-        releaseId: number;
-        releaseUrl: string;
-        releaseTag: string;
-    };
-    files: Record<string, {
+    success: boolean;
+    binaryFiles: {
         filename: string;
+        type: string;
         size: number;
-        checksum: string;
-        downloadUrl?: string;
-    }>;
+        generatedAt: string;
+    }[];
+    compilerOutput: {
+        timestamp: string;
+        output: string;
+        type: 'stdout' | 'stderr';
+    }[];
 }
 
 export interface OtaProgress {
@@ -133,14 +98,6 @@ export interface TimelineEvent {
     source: 'client' | 'server';
     event: string;
     message: string;
-}
-
-export interface CompilationJob {
-  id: string;
-  status: 'acknowledged' | 'preparing' | 'compiling' | 'uploading' | 'completed' | 'failed';
-  progress?: number;
-  message: string;
-  timestamp: string; // ISO 8601 string
 }
 
 export interface Project {

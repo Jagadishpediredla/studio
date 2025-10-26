@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import type { ChatMessage } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { CardHeader, CardContent } from './ui/card';
 
 interface AiControlsProps {
   projectName: string;
@@ -19,10 +19,11 @@ interface AiControlsProps {
   onSendMessage: () => void;
   isGenerating: boolean;
   chatHistory: ChatMessage[];
-  onManualAction: (action: 'compile') => void;
+  onManualCompile: () => void;
+  statusIndicator: React.ReactNode;
 }
 
-export default function AiControls({ projectName, prompt, setPrompt, onSendMessage, isGenerating, chatHistory, onManualAction }: AiControlsProps) {
+export default function AiControls({ projectName, prompt, setPrompt, onSendMessage, isGenerating, chatHistory, onManualCompile, statusIndicator }: AiControlsProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,9 +44,12 @@ export default function AiControls({ projectName, prompt, setPrompt, onSendMessa
 
   return (
     <div className="flex flex-col h-full bg-card">
-       <CardHeader className="flex flex-row items-center justify-between p-4 border-b">
-        <h1 className="text-xl font-headline font-bold text-foreground">{projectName}</h1>
-        <Button onClick={() => onManualAction('compile')} disabled={isGenerating}>
+       <CardHeader className="flex flex-row items-center justify-between p-3 border-b">
+        <div className="flex items-center gap-4">
+            <h1 className="text-lg font-headline font-bold text-foreground">{projectName}</h1>
+            {statusIndicator}
+        </div>
+        <Button onClick={onManualCompile} disabled={isGenerating}>
           <Play className="mr-2 h-4 w-4"/>
           Compile & Run
         </Button>
@@ -54,14 +58,15 @@ export default function AiControls({ projectName, prompt, setPrompt, onSendMessa
         <ScrollArea className="flex-grow h-full pr-4 -mr-4">
             <div className="space-y-6" ref={scrollAreaRef as any}>
             {chatHistory.map((msg, index) => (
-                <div key={index} className={cn("flex items-start gap-3 w-full", msg.role === 'user' ? 'justify-end' : '')}>
+                <div key={index} className={cn("flex items-start gap-3 w-full", msg.role === 'user' ? 'flex-row-reverse' : '')}>
                 {msg.role === 'assistant' && (
                     <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
                         <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
                     </Avatar>
                 )}
                 <div className={cn(
-                    "rounded-lg p-3 max-w-[85%] text-sm prose prose-sm prose-invert",
+                    "rounded-lg p-3 max-w-[85%] text-sm",
+                     "prose prose-sm prose-invert",
                     msg.role === 'assistant' ? 'bg-muted' : 'bg-primary text-primary-foreground'
                 )}>
                     <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -88,10 +93,10 @@ export default function AiControls({ projectName, prompt, setPrompt, onSendMessa
         <div className="relative">
             <Textarea
             placeholder='e.g., "Make the LED blink twice as fast."'
-            className="min-h-[60px] text-sm pr-20"
+            className="min-h-[60px] text-base pr-12"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             disabled={isGenerating}
             />
             <Button 
@@ -99,6 +104,7 @@ export default function AiControls({ projectName, prompt, setPrompt, onSendMessa
                 disabled={isGenerating || !prompt} 
                 className="absolute bottom-2.5 right-2.5"
                 size="icon"
+                variant="ghost"
             >
             {isGenerating ? (
                 <Loader className="h-5 w-5 animate-spin" />
