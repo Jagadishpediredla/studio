@@ -20,11 +20,12 @@ import CodeEditorPanel from '@/components/code-editor-panel';
 import IntelligencePanel from '@/components/intelligence-panel';
 import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
-import { Loader2, Play } from 'lucide-react';
+import { Loader2, Play, Bot, MoreHorizontal, Cog, UploadCloud, ShieldCheck, BrainCircuit, History as HistoryIcon } from 'lucide-react';
 import StatusIndicator from '@/components/status-indicator';
 import { Button } from '@/components/ui/button';
-import AppHeader from '@/components/app-header';
 import type { PipelineStatus } from '@/lib/types';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import DeploymentPipeline from '@/components/deployment-pipeline';
 
 export type StatusUpdate = {
     timestamp: string;
@@ -518,19 +519,77 @@ export default function AidePage() {
     )
   }
 
+  const isActionInProgress = Object.values(pipelineStatus).some(status => status === 'processing');
+
   return (
     <TooltipProvider>
       <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
         <NavRail onNavAction={handleNavAction} />
         <div className="flex-1 flex flex-col min-w-0 sm:pl-14 pb-16 sm:pb-0">
-          <AppHeader 
-            pipelineStatus={pipelineStatus}
-            compilationStatus={compilationLogs.map(log => log.message)}
-            onManualAction={handleManualAction}
-            onShowHistory={() => setIsHistoryOpen(true)}
-            className="col-span-3" 
-          />
-          <main className="flex-grow min-h-0 grid grid-cols-1 md:grid-cols-2 grid-rows-[1fr] gap-4 p-4 overflow-hidden">
+          {/* Enhanced Header with Prominent Compile Button */}
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b bg-card">
+            <div className="flex items-center gap-3 mb-3 sm:mb-0">
+              <Bot className="h-8 w-8 text-primary" />
+              <div>
+                <h1 className="text-lg font-headline font-bold text-foreground">{project?.name || 'AIoT Studio'}</h1>
+                <p className="text-xs text-muted-foreground">Cloud-based IoT Development Environment</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Button 
+                onClick={handleManualCompile} 
+                disabled={isGenerating || isCompiling}
+                className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+              >
+                <Play className="mr-2 h-4 w-4" />
+                Compile & Run
+                {(isGenerating || isCompiling) && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                onClick={() => setIsHistoryOpen(true)}
+                size="sm"
+              >
+                <HistoryIcon className="h-4 w-4" />
+                <span className="ml-2 hidden sm:inline">History</span>
+              </Button>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleManualAction('compile')} disabled={isActionInProgress}>
+                    <Cog className="mr-2 h-4 w-4" /> Compile Firmware
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleManualAction('upload')} disabled={isActionInProgress}>
+                    <UploadCloud className="mr-2 h-4 w-4" /> Upload to Device
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleManualAction('verify')} disabled={isActionInProgress}>
+                    <ShieldCheck className="mr-2 h-4 w-4" /> Verify on Device
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setIsIntelligencePanelOpen(true)}>
+                    <BrainCircuit className="mr-2 h-4 w-4" /> Intelligence Panel
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </header>
+          
+          {/* Status Bar */}
+          <div className="px-4 py-2 border-b bg-muted/50">
+            <DeploymentPipeline 
+              status={pipelineStatus} 
+              compilationStatus={compilationLogs.map(log => log.message)} 
+            />
+          </div>
+          
+          <main className="flex-grow min-h-0 grid grid-cols-1 lg:grid-cols-2 grid-rows-[1fr] gap-4 p-4 overflow-hidden">
             <div className="flex flex-col h-full min-h-0">
               <AiControls
                 prompt={prompt}
