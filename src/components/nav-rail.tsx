@@ -21,7 +21,7 @@ const navItems = [
 export default function NavRail({ onNavAction }: NavRailProps) {
     
     return (
-        <aside className="h-full bg-card border-r flex flex-col items-center justify-between p-2">
+        <aside className="fixed left-0 top-0 h-full bg-card border-r flex flex-col items-center justify-between p-2 z-50">
             <div>
                  <TooltipProvider>
                     <Link href="/" className="flex items-center justify-center p-2 mb-4">
@@ -52,3 +52,5 @@ export default function NavRail({ onNavAction }: NavRailProps) {
         </aside>
     );
 }
+
+    

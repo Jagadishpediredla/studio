@@ -132,7 +132,7 @@ const aideChatFlow = ai.defineFlow(
       `,
       history: [...(history || []), { role: 'user', content: prompt }],
       tools: [generateCodeTool, compileCodeTool, analyzeCodeTool, visualizeCodeTool, runTechnicalAnalysisTool],
-      model: 'googleai/gemini-2.5-flash',
+      model: 'googleai/gemini-1.5-flash',
       config: {
         safetySettings: [
           {
@@ -150,3 +150,5 @@ const aideChatFlow = ai.defineFlow(
 export async function aideChat(input: AideChatInput) {
     return await aideChatFlow(input);
 }
+
+    

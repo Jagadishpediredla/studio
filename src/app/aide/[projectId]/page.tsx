@@ -144,7 +144,7 @@ export default function AidePage() {
     a.href = downloadUrl;
     a.download = filename;
     document.body.appendChild(a);
-    a.click();
+a.click();
     document.body.removeChild(a);
 
     const successMsg = `Firmware "${filename}" downloaded successfully.`;
@@ -188,20 +188,21 @@ export default function AidePage() {
         prompt: currentPrompt,
       });
 
-      let responseText = response.text();
-
-      if (response.candidates[0].message.content) {
-        for (const part of response.candidates[0].message.content) {
+      if (response.choices[0].message.content) {
+        let assistantResponseText = '';
+        for (const part of response.choices[0].message.content) {
+            if (part.text) {
+                assistantResponseText += part.text;
+            }
             if (part.toolRequest) {
                 await executeTool(part, newChatHistory); 
-                responseText = ''; 
+                assistantResponseText = ''; // Clear text if tool is used
             }
         }
-      }
-      
-      if (responseText) {
-        newChatHistory = [...newChatHistory, { role: 'assistant', content: responseText }];
-        updateProjectData({ chatHistory: newChatHistory });
+        if (assistantResponseText) {
+            newChatHistory = [...newChatHistory, { role: 'assistant', content: assistantResponseText }];
+            updateProjectData({ chatHistory: newChatHistory });
+        }
       }
 
     } catch (error: any) {
@@ -400,7 +401,11 @@ export default function AidePage() {
 
   const handleNavAction = (action: 'showHistory' | 'showIntelligence') => {
     if (action === 'showHistory') setIsHistoryOpen(true);
-    if (action === 'showIntelligence') setIsIntelligencePanelOpen(true);
+    if (action === 'showIntelligence') {
+      setIsIntelligencePanelOpen(true);
+      // Default to logs when opening, as it's the most common action
+      setActiveTab('logs');
+    }
   }
 
   const handleManualCompile = async () => {
@@ -472,9 +477,9 @@ export default function AidePage() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
+      <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
         <NavRail onNavAction={handleNavAction} />
-        <main className="flex-grow flex flex-col min-h-0 pl-14">
+        <div className="flex-1 flex flex-col min-w-0">
           <header className="flex items-center justify-between p-3 border-b shrink-0">
             <h1 className="text-lg font-headline font-bold text-foreground">{project.name}</h1>
             <div className="flex items-center gap-4">
@@ -488,7 +493,7 @@ export default function AidePage() {
               </Button>
             </div>
           </header>
-          <div className="flex-grow min-h-0">
+          <main className="flex-grow min-h-0">
             <ResizablePanelGroup direction="horizontal">
               <ResizablePanel defaultSize={50} minSize={30}>
                 <AiControls
@@ -508,8 +513,8 @@ export default function AidePage() {
                   />
               </ResizablePanel>
             </ResizablePanelGroup>
-          </div>
-        </main>
+          </main>
+        </div>
         
         <HistorySheet 
           isOpen={isHistoryOpen}
@@ -534,3 +539,5 @@ export default function AidePage() {
     </TooltipProvider>
   );
 }
+
+    
