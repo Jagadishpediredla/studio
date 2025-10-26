@@ -172,29 +172,29 @@ export default function HomePage() {
                   ))
                 ) : sortedProjects.length > 0 ? sortedProjects.map(project => (
                   <div key={project.id} className="p-4 border rounded-lg hover:bg-muted transition-colors group h-full flex flex-col justify-between">
-                    <Link href={`/aide/${project.id}`} passHref className="flex flex-col justify-between h-full">
-                        <div>
-                          <div className="font-semibold flex items-center gap-2 mb-2">
-                            <Folder className="text-primary"/> 
-                            {project.name}
-                          </div>
-                          <p className="text-sm text-muted-foreground flex items-center gap-2">
-                            <Clock className="h-4 w-4"/> 
-                            Last modified: {new Date(project.updatedAt).toLocaleString()}
-                          </p>
-                        </div>
-                        <div className="flex justify-end items-center mt-4">
-                            <span className="text-sm text-primary group-hover:underline">Open Workspace</span>
-                            <ArrowRight className="h-4 w-4 ml-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                    </Link>
-                    <div className="flex justify-end -mt-8">
+                    <div className="flex justify-between items-start">
+                        <Link href={`/aide/${project.id}`} className="flex-grow">
+                            <div className="font-semibold flex items-center gap-2 mb-2">
+                                <Folder className="text-primary"/> 
+                                {project.name}
+                            </div>
+                        </Link>
                         <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setProjectToDelete(project); }}>
+                            <Button variant="ghost" size="icon" className="-mr-2 -mt-2 shrink-0" onClick={(e) => { e.stopPropagation(); setProjectToDelete(project); }}>
                                 <Trash2 className="h-4 w-4 text-destructive/50 hover:text-destructive" />
                             </Button>
                         </AlertDialogTrigger>
                     </div>
+                    <Link href={`/aide/${project.id}`} passHref className="flex flex-col justify-end h-full mt-2">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2">
+                        <Clock className="h-4 w-4"/> 
+                        Last modified: {new Date(project.updatedAt).toLocaleString()}
+                      </p>
+                      <div className="flex justify-end items-center mt-4">
+                          <span className="text-sm text-primary group-hover:underline">Open Workspace</span>
+                          <ArrowRight className="h-4 w-4 ml-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </Link>
                   </div>
                 )) : (
                   <p className="text-muted-foreground col-span-full text-center py-8">No projects found. Create one to get started!</p>
@@ -221,3 +221,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    
