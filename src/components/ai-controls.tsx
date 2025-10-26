@@ -39,37 +39,37 @@ export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerat
   };
 
   return (
-    <div className="flex flex-col h-full bg-card p-4 gap-4">
+    <div className="flex flex-col h-full bg-card p-3 sm:p-4 gap-3 sm:gap-4">
         <ScrollArea className="flex-grow h-full pr-4 -mr-4">
-            <div className="space-y-6" ref={scrollAreaRef as any}>
+            <div className="space-y-4 sm:space-y-6" ref={scrollAreaRef as any}>
             {chatHistory.map((msg, index) => (
-                <div key={index} className={cn("flex items-start gap-3 w-full", msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                <div key={index} className={cn("flex items-start gap-2 sm:gap-3 w-full", msg.role === 'user' ? 'justify-end' : 'justify-start')}>
                 {msg.role === 'assistant' && (
-                    <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
-                        <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
+                    <Avatar className="h-7 w-7 sm:h-8 sm:w-8 bg-primary text-primary-foreground flex-shrink-0">
+                        <AvatarFallback><Bot className="h-4 w-4 sm:h-5 sm:w-5" /></AvatarFallback>
                     </Avatar>
                 )}
                 <div className={cn(
-                    "rounded-lg p-3 max-w-[85%] text-sm",
-                     "prose prose-sm prose-invert",
+                    "rounded-lg p-2 sm:p-3 max-w-[85%] text-xs sm:text-sm",
+                     "prose prose-xs sm:prose-sm prose-invert",
                     msg.role === 'assistant' ? 'bg-muted' : 'bg-primary text-primary-foreground'
                 )}>
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                 </div>
                  {msg.role === 'user' && (
-                    <Avatar className="h-8 w-8">
-                        <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
+                    <Avatar className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0">
+                        <AvatarFallback><User className="h-4 w-4 sm:h-5 sm:w-5" /></AvatarFallback>
                     </Avatar>
                 )}
                 </div>
             ))}
              {isGenerating && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user' && (
-                <div className="flex items-start gap-3">
-                    <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
-                        <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
+                <div className="flex items-start gap-2 sm:gap-3">
+                    <Avatar className="h-7 w-7 sm:h-8 sm:w-8 bg-primary text-primary-foreground flex-shrink-0">
+                        <AvatarFallback><Bot className="h-4 w-4 sm:h-5 sm:w-5" /></AvatarFallback>
                     </Avatar>
-                    <div className="rounded-lg p-3 max-w-[85%] text-sm bg-muted flex items-center">
-                        <Loader className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <div className="rounded-lg p-2 sm:p-3 max-w-[85%] text-xs sm:text-sm bg-muted flex items-center">
+                        <Loader className="h-4 w-4 sm:h-5 sm:w-5 animate-spin text-muted-foreground" />
                     </div>
                 </div>
             )}
@@ -78,7 +78,7 @@ export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerat
         <div className="relative">
             <Textarea
             placeholder='e.g., "Make the LED blink twice as fast."'
-            className="min-h-[60px] text-base pr-12"
+            className="min-h-[50px] sm:min-h-[60px] text-sm sm:text-base pr-10 sm:pr-12"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyPress}
@@ -87,14 +87,14 @@ export default function AiControls({ prompt, setPrompt, onSendMessage, isGenerat
             <Button 
                 onClick={onSendMessage} 
                 disabled={isGenerating || !prompt} 
-                className="absolute bottom-2.5 right-2.5"
+                className="absolute bottom-2 right-2 h-7 w-7 sm:bottom-2.5 sm:right-2.5 sm:h-8 sm:w-8"
                 size="icon"
                 variant="ghost"
             >
             {isGenerating ? (
-                <Loader className="h-5 w-5 animate-spin" />
+                <Loader className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
             ) : (
-                <Wand2 className="h-5 w-5" />
+                <Wand2 className="h-4 w-4 sm:h-5 sm:w-5" />
             )}
             <span className="sr-only">Send Message</span>
             </Button>

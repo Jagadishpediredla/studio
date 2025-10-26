@@ -44,26 +44,26 @@ export default function CodeEditorPanel({ code, onCodeChange, onDownloadCode, bo
 
   return (
     <div className="flex flex-col h-full bg-card border-l">
-      <header className="p-3 border-b flex items-center justify-between">
-        <h2 className="font-headline text-base">Code</h2>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Code className="h-4 w-4" />
-              <span>Board (FQBN):</span>
-              <Badge variant="secondary">{boardInfo?.fqbn || '...'}</Badge>
+      <header className="p-2 sm:p-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h2 className="font-headline text-sm sm:text-base">Code</h2>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Code className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Board (FQBN):</span>
+              <Badge variant="secondary" className="text-xs">{boardInfo?.fqbn || '...'}</Badge>
             </div>
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4" />
-              <span>Libraries:</span>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <BookOpen className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Libraries:</span>
               {boardInfo?.libraries && boardInfo.libraries.length > 0 ? (
-                boardInfo.libraries.map(lib => <Badge key={lib} variant="secondary">{lib}</Badge>)
+                boardInfo.libraries.map(lib => <Badge key={lib} variant="secondary" className="text-xs">{lib}</Badge>)
               ) : (
-                <Badge variant="outline">None</Badge>
+                <Badge variant="outline" className="text-xs">None</Badge>
               )}
             </div>
-             <Button variant="outline" size="sm" onClick={onDownloadCode}>
-                <Download className="mr-2 h-4 w-4" />
-                Download Code
+             <Button variant="outline" size="sm" className="h-7 text-xs sm:h-8 sm:text-sm px-2 sm:px-3" onClick={onDownloadCode}>
+                <Download className="mr-1 h-3 w-3 sm:mr-2 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Download</span>
             </Button>
         </div>
       </header>
@@ -84,7 +84,7 @@ export default function CodeEditorPanel({ code, onCodeChange, onDownloadCode, bo
               tabSize: 2,
               useWorker: true,
             }}
-            fontSize={16}
+            fontSize={14}
             showPrintMargin={false}
             showGutter={true}
             highlightActiveLine={true}

@@ -39,8 +39,9 @@ export default function DeploymentPipeline({ status, compilationStatus = [] }: D
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background p-2">
+      <div className="flex flex-col gap-3">
+        {/* Pipeline Steps */}
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background p-3">
             {steps.map((stepKey, index) => {
             const stepKeyTyped = stepKey as keyof typeof stepConfig;
             const stepStatus = status[stepKeyTyped];
@@ -52,10 +53,10 @@ export default function DeploymentPipeline({ status, compilationStatus = [] }: D
                 <React.Fragment key={stepKey}>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1 sm:gap-2 cursor-default">
-                        <StepIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
-                        <span className="text-xs sm:text-sm font-medium text-muted-foreground">{stepConfig[stepKey].label}</span>
-                        <StatusIcon className={cn("h-4 w-4 sm:h-5 sm:w-5", color, animation)} />
+                    <div className="flex items-center gap-1.5 sm:gap-2 cursor-default px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors">
+                        <StepIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
+                        <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate max-w-[80px] sm:max-w-[120px]">{stepConfig[stepKey].label}</span>
+                        <StatusIcon className={cn("h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0", color, animation)} />
                     </div>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -63,15 +64,16 @@ export default function DeploymentPipeline({ status, compilationStatus = [] }: D
                     </TooltipContent>
                 </Tooltip>
                 {index < steps.length - 1 && (
-                    <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 text-border" />
+                    <ChevronRight className="h-4 w-4 text-border hidden sm:block" />
                 )}
                 </React.Fragment>
             );
             })}
         </div>
 
+        {/* Compilation Status */}
         {compilationStatus.length > 0 && (
-            <div className="bg-black/50 rounded-lg p-2 max-h-32">
+            <div className="bg-black/50 rounded-lg p-3 max-h-32">
                  <div className='flex items-center gap-2 text-sm font-medium text-muted-foreground p-1'>
                     <Terminal className="h-4 w-4" />
                     <span className="text-xs sm:text-sm">Compilation Status</span>

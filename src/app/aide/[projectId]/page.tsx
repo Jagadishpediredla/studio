@@ -523,92 +523,91 @@ export default function AidePage() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
+      <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
         <NavRail onNavAction={handleNavAction} />
-        <div className="flex-1 flex flex-col min-w-0 sm:pl-14 pb-16 sm:pb-0">
-          {/* Enhanced Header with Prominent Compile Button */}
-          <header className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b bg-card">
-            <div className="flex items-center gap-3 mb-3 sm:mb-0">
-              <Bot className="h-8 w-8 text-primary" />
-              <div>
-                <h1 className="text-lg font-headline font-bold text-foreground">{project?.name || 'AIoT Studio'}</h1>
-                <p className="text-xs text-muted-foreground">Cloud-based IoT Development Environment</p>
-              </div>
+        {/* Enhanced Header with Prominent Compile Button */}
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b bg-card flex-shrink-0">
+          <div className="flex items-center gap-3 mb-3 sm:mb-0">
+            <Bot className="h-8 w-8 text-primary" />
+            <div>
+              <h1 className="text-lg font-headline font-bold text-foreground">{project?.name || 'AIoT Studio'}</h1>
+              <p className="text-xs text-muted-foreground">Cloud-based IoT Development Environment</p>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <Button 
-                onClick={handleManualCompile} 
-                disabled={isGenerating || isCompiling}
-                className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-              >
-                <Play className="mr-2 h-4 w-4" />
-                Compile & Run
-                {(isGenerating || isCompiling) && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                onClick={() => setIsHistoryOpen(true)}
-                size="sm"
-              >
-                <HistoryIcon className="h-4 w-4" />
-                <span className="ml-2 hidden sm:inline">History</span>
-              </Button>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleManualAction('compile')} disabled={isActionInProgress}>
-                    <Cog className="mr-2 h-4 w-4" /> Compile Firmware
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleManualAction('upload')} disabled={isActionInProgress}>
-                    <UploadCloud className="mr-2 h-4 w-4" /> Upload to Device
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleManualAction('verify')} disabled={isActionInProgress}>
-                    <ShieldCheck className="mr-2 h-4 w-4" /> Verify on Device
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setIsIntelligencePanelOpen(true)}>
-                    <BrainCircuit className="mr-2 h-4 w-4" /> Intelligence Panel
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </header>
-          
-          {/* Status Bar */}
-          <div className="px-4 py-2 border-b bg-muted/50">
-            <DeploymentPipeline 
-              status={pipelineStatus} 
-              compilationStatus={compilationLogs.map(log => log.message)} 
-            />
           </div>
           
-          <main className="flex-grow min-h-0 grid grid-cols-1 lg:grid-cols-2 grid-rows-[1fr] gap-4 p-4 overflow-hidden">
-            <div className="flex flex-col h-full min-h-0">
-              <AiControls
-                prompt={prompt}
-                setPrompt={setPrompt}
-                onSendMessage={handleSendMessage}
-                isGenerating={isGenerating || isCompiling}
-                chatHistory={chatHistory}
-              />
-            </div>
-            <div className="flex flex-col h-full min-h-0">
-              <CodeEditorPanel
-                code={code}
-                onCodeChange={handleCodeChange}
-                onDownloadCode={() => handleDownloadCode(code, new Date())}
-                boardInfo={boardInfo}
-              />
-            </div>
-          </main>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button 
+              onClick={handleManualCompile} 
+              disabled={isGenerating || isCompiling}
+              className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 h-10 px-3 sm:px-4"
+            >
+              <Play className="mr-2 h-4 w-4" />
+              <span className="hidden xs:inline">Compile & Run</span>
+              {(isGenerating || isCompiling) && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              onClick={() => setIsHistoryOpen(true)}
+              size="sm"
+              className="h-10 px-2 sm:px-3"
+            >
+              <HistoryIcon className="h-4 w-4" />
+              <span className="ml-2 hidden sm:inline">History</span>
+            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-10 px-2 sm:px-3">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleManualAction('compile')} disabled={isActionInProgress}>
+                  <Cog className="mr-2 h-4 w-4" /> Compile Firmware
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleManualAction('upload')} disabled={isActionInProgress}>
+                  <UploadCloud className="mr-2 h-4 w-4" /> Upload to Device
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleManualAction('verify')} disabled={isActionInProgress}>
+                  <ShieldCheck className="mr-2 h-4 w-4" /> Verify on Device
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setIsIntelligencePanelOpen(true)}>
+                  <BrainCircuit className="mr-2 h-4 w-4" /> Intelligence Panel
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+        
+        {/* Status Bar */}
+        <div className="px-4 py-2 border-b bg-muted/50 flex-shrink-0">
+          <DeploymentPipeline 
+            status={pipelineStatus} 
+            compilationStatus={compilationLogs.map(log => log.message)} 
+          />
         </div>
+        
+        <main className="flex-grow overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+          <div className="flex flex-col overflow-hidden">
+            <AiControls
+              prompt={prompt}
+              setPrompt={setPrompt}
+              onSendMessage={handleSendMessage}
+              isGenerating={isGenerating || isCompiling}
+              chatHistory={chatHistory}
+            />
+          </div>
+          <div className="flex flex-col overflow-hidden">
+            <CodeEditorPanel
+              code={code}
+              onCodeChange={handleCodeChange}
+              onDownloadCode={() => handleDownloadCode(code, new Date())}
+              boardInfo={boardInfo}
+            />
+          </div>
+        </main>
         
         <HistorySheet 
           isOpen={isHistoryOpen}
