@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Folder, Clock, ArrowRight, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Folder, Clock, ArrowRight, Loader2, Trash2, Wifi } from 'lucide-react';
 import { getProjects, createProject, deleteProject } from '@/app/actions';
 import { type Project } from '@/lib/types';
 import { useState, useEffect } from 'react';
@@ -115,34 +115,42 @@ export default function HomePage() {
       </header>
       
       <main className="w-full max-w-5xl mx-auto">
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="w-full sm:w-auto text-base h-14 px-8 rounded-lg mb-8">
-              <Plus className="mr-2" />
-              Create New Project
+        <div className="flex gap-4 mb-8">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="lg" className="w-full sm:w-auto text-base h-14 px-8 rounded-lg">
+                  <Plus className="mr-2" />
+                  Create New Project
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create a New Project</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <Input
+                    placeholder="Enter project name..."
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
+                    autoFocus
+                  />
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleCreateProject} disabled={!newProjectName.trim() || isCreating}>
+                    {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Create Project
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Button size="lg" variant="outline" className="w-full sm:w-auto text-base h-14 px-8 rounded-lg" asChild>
+                <Link href="/ota">
+                    <Wifi className="mr-2" />
+                    Firmware OTA Update
+                </Link>
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create a New Project</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <Input
-                placeholder="Enter project name..."
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
-                autoFocus
-              />
-            </div>
-            <DialogFooter>
-              <Button onClick={handleCreateProject} disabled={!newProjectName.trim() || isCreating}>
-                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Project
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        </div>
         
         <AlertDialog>
           <Card>

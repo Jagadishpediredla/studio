@@ -49,7 +49,7 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
   };
 
   const loadJobDetails = async (jobId: string) => {
-    if (selectedJob?.logId === jobId && !isDetailsLoading) return;
+    if (selectedJob?.jobId === jobId && !isDetailsLoading) return;
     setIsDetailsLoading(true);
     try {
       const response = await getJobDetails(jobId);
@@ -60,6 +60,7 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
       }
     } catch (err: any) {
        setError(err.message);
+       setSelectedJob(null);
     } finally {
       setIsDetailsLoading(false);
     }
@@ -146,7 +147,7 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
                     onClick={() => loadJobDetails(job.jobId)}
                     className={cn(
                         `p-3 border rounded-lg cursor-pointer hover:bg-muted/80 transition-colors`,
-                        selectedJob?.logId === job.jobId ? 'border-primary bg-muted' : 'bg-card'
+                        selectedJob?.jobId === job.jobId ? 'border-primary bg-muted' : 'bg-card'
                     )}
                   >
                     <div className="flex justify-between items-center">
@@ -156,7 +157,7 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 truncate">
-                      {job.requestId}
+                      {job.requestId || 'N/A'}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {new Date(job.createdAt).toLocaleString()}
@@ -184,7 +185,7 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
           ) : selectedJob ? (
             <div className="space-y-6">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div><label className="font-medium text-muted-foreground">Job ID</label><div className="font-mono truncate">{selectedJob.logId}</div></div>
+                    <div><label className="font-medium text-muted-foreground">Job ID</label><div className="font-mono truncate">{selectedJob.jobId}</div></div>
                     <div><label className="font-medium text-muted-foreground">Request ID</label><div className="font-mono truncate">{selectedJob.requestId}</div></div>
                     <div><label className="font-medium text-muted-foreground">Build ID</label><div className="font-mono truncate">{selectedJob.buildId}</div></div>
                     
@@ -201,7 +202,6 @@ export default function JobDashboard({ userId }: JobDashboardProps) {
                     <div><label className="font-medium text-muted-foreground">User ID</label><div>{selectedJob.clientSide?.userId}</div></div>
                 </div>
                 
-                {/* Timeline - Convert object to array if needed */}
                 {selectedJob.timeline && (
                     <div>
                         <h3 className="font-semibold mb-4 flex items-center gap-2"><Clock /> Merged Timeline</h3>

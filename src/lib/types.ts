@@ -58,15 +58,15 @@ export interface JobSummary {
   jobId: string; // logId from the log object
   status: string;
   createdAt: string; // ISO string
-  requestId: string;
-  buildId: string;
+  requestId?: string;
+  buildId?: string;
   duration?: number; // Calculated from client-side metrics if available
 }
 
 export interface JobDetails {
-    logId: string;
-    requestId: string;
-    buildId: string;
+    jobId: string;
+    requestId?: string;
+    buildId?: string;
     createdAt: number;
     updatedAt: number;
     status: string;
@@ -83,7 +83,7 @@ export interface JobDetails {
         events: LogEvent[];
         metrics: Record<string, any>;
     };
-    timeline: { [key: string]: TimelineEvent };
+    timeline?: { [key: string]: TimelineEvent };
 }
 
 export interface LogEvent {

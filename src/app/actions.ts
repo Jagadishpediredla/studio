@@ -5,7 +5,6 @@ import type { Project, BuildInfo } from '@/lib/types';
 import { database } from '@/lib/firebase';
 import { ref, get, set, push, remove } from 'firebase/database';
 
-const CLIENT_USER_ID = 'user_123';
 const COMPILATION_API_URL = process.env.COMPILATION_API_URL || 'http://35.206.79.23:3000';
 
 // --- Project Actions ---
@@ -116,7 +115,9 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
             return { success: false, error: `Project with ID ${id} not found.` };
         }
         
-        const updateData: { [key: string]: any } = { ...snapshot.val(), ...updates };
+        const existingData = snapshot.val();
+
+        const updateData: { [key: string]: any } = { ...existingData, ...updates };
         
         updateData.updatedAt = new Date().toISOString();
 
@@ -125,6 +126,19 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
                 ...v,
                 timestamp: new Date(v.timestamp).toISOString()
             }));
+        }
+
+        // Deep merge version history if it's being updated
+        if (updates.versionHistory && existingData.versionHistory) {
+            const historyMap = new Map(existingData.versionHistory.map((v: any) => [v.id, v]));
+            updates.versionHistory.forEach((v: any) => {
+                if(historyMap.has(v.id)) {
+                    historyMap.set(v.id, { ...historyMap.get(v.id), ...v });
+                } else {
+                    historyMap.set(v.id, v);
+                }
+            });
+            updateData.versionHistory = Array.from(historyMap.values());
         }
 
         await set(projectRef, updateData);
@@ -208,18 +222,25 @@ export async function getJobDetails(jobId: string) {
 
 export async function getJobs(limit = 50, startAfter?: string, userId?: string) {
     try {
-        // This is a mock implementation as the new service doesn't have a multi-job endpoint
-        // For now, we return an empty list to avoid breaking the UI.
-        // A real implementation would query a jobs endpoint on the new service.
-        return { success: true, jobs: [], statistics: { totalJobs: 0, completedJobs: 0, failedJobs: 0, averageDuration: 0 }};
+      const response = await fetch(`${COMPILATION_API_URL}/api/jobs`);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const jobs = await response.json();
+      
+      const responseStats = await fetch(`${COMPILATION_API_URL}/api/stats`);
+      if(!responseStats.ok){
+         throw new Error('Network response was not ok for stats');
+      }
+      const statistics = await responseStats.json();
+      
+      return { success: true, jobs: jobs, statistics: statistics};
     } catch(error: any) {
         console.error(`[COMPILER] Get Jobs Error:`, error);
         return { success: false, error: error.message };
     }
 }
 
-
-// --- Old Firebase compilation actions are now removed ---
 
 export async function performOtaUpdate(
   firmwareFile: string,

@@ -93,20 +93,26 @@ export default function AidePage() {
     return () => cleanupPoller();
   }, [projectId, router, toast, cleanupPoller]);
 
-  const updateProjectData = useCallback(async (updates: Partial<Omit<Project, 'id'>>) => {
-      if (!projectId) return;
+  const updateProjectData = useCallback(async (updates: Partial<Omit<Project, 'id' | 'versionHistory'>> & { versionHistory?: HistoryItem[] }) => {
+    if (!projectId) return;
+  
+    setProject(prev => {
+      if (!prev) return null;
+      const updatedVersionHistory = updates.versionHistory 
+        ? updates.versionHistory.map(v => ({...v, timestamp: new Date(v.timestamp) })) 
+        : prev.versionHistory;
       
-      setProject(prev => prev ? { ...prev, ...updates, updatedAt: new Date().toISOString() } : null);
-      
-      const result = await updateProject(projectId, updates);
-      if (!result.success) {
-          toast({
-              title: "Save Error",
-              description: `Failed to save project changes: ${result.error}`,
-              variant: 'destructive'
-          })
-      }
-      
+      return { ...prev, ...updates, versionHistory: updatedVersionHistory, updatedAt: new Date().toISOString() };
+    });
+  
+    const result = await updateProject(projectId, updates as Partial<Omit<Project, 'id'>>);
+    if (!result.success) {
+      toast({
+        title: "Save Error",
+        description: `Failed to save project changes: ${result.error}`,
+        variant: 'destructive'
+      });
+    }
   }, [projectId, toast]);
   
   const addLog = (message: string, type: StatusUpdate['type'] = 'info', progress?: number) => {
@@ -117,7 +123,6 @@ export default function AidePage() {
             progress,
             timestamp: new Date().toISOString(),
         };
-        // Simple check to avoid duplicate consecutive logs
         if (prev.length > 0 && prev[prev.length - 1].message === message) {
             return prev;
         }
@@ -127,15 +132,18 @@ export default function AidePage() {
   
   const handleFirmwareDownload = async (result: any) => {
     addLog(`[APP] Build complete. Downloading binary...`);
+    
+    const downloadUrl = result.downloads.bin.startsWith('http') 
+      ? result.downloads.bin 
+      : process.env.NEXT_PUBLIC_COMPILATION_API_URL + result.downloads.bin;
 
-    const downloadUrl = process.env.NEXT_PUBLIC_COMPILATION_API_URL + result.downloads.bin;
     const filename = result.downloads.bin.split('/').pop();
     
     const a = document.createElement('a');
     a.href = downloadUrl;
     a.download = filename;
     document.body.appendChild(a);
-a.click();
+    a.click();
     document.body.removeChild(a);
 
     const successMsg = `Firmware "${filename}" downloaded successfully.`;
@@ -166,7 +174,7 @@ a.click();
         setPrompt('');
     } else {
         const autoFixMessage: ChatMessage = { role: 'assistant', content: "I've detected a compilation error. I will try to fix it and re-compile." };
-        newChatHistory = [...chatHistory, autoFixMessage, userMessage];
+        newChatHistory = [...chatHistory, autoFixMessage];
         updateProjectData({ chatHistory: newChatHistory });
     }
 
@@ -185,7 +193,7 @@ a.click();
         for (const part of response.candidates[0].message.content) {
             if (part.toolRequest) {
                 await executeTool(part, newChatHistory); 
-                responseText = ''; // Don't double-post if a tool was used
+                responseText = ''; 
             }
         }
       }
@@ -198,7 +206,7 @@ a.click();
     } catch (error: any) {
       console.error(error);
       const message = error.message || 'An error occurred while talking to the AI.';
-      const newHistory = [...chatHistory, { role: 'assistant', content: `I ran into an error: ${message}` }];
+      const newHistory = [...chatHistory, userMessage, { role: 'assistant', content: `I ran into an error: ${message}` }];
       updateProjectData({ chatHistory: newHistory });
       toast({ title: 'AI Error', description: message, variant: 'destructive' });
     } finally {
@@ -256,11 +264,10 @@ a.click();
             addLog('[AIDE] Compilation failed. Asking AI to fix the code...', 'error');
             handleSendMessage(retryPrompt);
             setIsCompiling(false);
-            // isGenerating remains true for the AI fix
         }
-    }, 2000); // Poll every 2 seconds
+    }, 2000);
 
-  }, [cleanupPoller, handleSendMessage, toast]);
+  }, [cleanupPoller, handleSendMessage, toast, updateProjectData]);
   
 
   const executeTool = async (toolRequest: ToolRequestPart, currentChatHistory: ChatMessage[]) => {
@@ -280,34 +287,30 @@ a.click();
             addLog('[AIDE] Code generation complete. Generating AI summary and visualization...', 'success');
             toast({ title: 'Success', description: 'New code generated.' });
 
-            Promise.all([
+            const [visualResult, explanationResult] = await Promise.all([
                 generateVisualExplanation({ code: newCode }),
                 analyzeCodeForExplanation({ code: newCode }),
-            ]).then(([visualResult, explanationResult]) => {
-                const visualizerHtmlResult = visualResult.html || '<body>Visualizer failed to generate.</body>';
-                const explanationResultText = explanationResult.explanation || 'AI summary failed to generate.';
-                
-                const currentHistoryItem: HistoryItem = { 
-                    id: historyId, 
-                    code: newCode, 
-                    board: newBoardInfo, 
-                    visualizerHtml: visualizerHtmlResult, 
-                    timestamp: new Date(), 
-                    prompt: prompt,
-                    explanation: explanationResultText,
-                };
-                
-                updateProjectData({
-                    code: newCode,
-                    boardInfo: newBoardInfo,
-                    versionHistory: [currentHistoryItem, ...(project?.versionHistory || [])],
-                });
-                addLog('[AIDE] AI Visualizer and Summary updated.', 'success');
+            ]);
 
-            }).catch(err => {
-                console.error("Error in AI enrichment:", err);
-                addLog(`[AI] Enrichment failed: ${err.message}`, 'error');
+            const visualizerHtmlResult = visualResult.html || '<body>Visualizer failed to generate.</body>';
+            const explanationResultText = explanationResult.explanation || 'AI summary failed to generate.';
+            
+            const currentHistoryItem: HistoryItem = { 
+                id: historyId, 
+                code: newCode, 
+                board: newBoardInfo, 
+                visualizerHtml: visualizerHtmlResult, 
+                timestamp: new Date(), 
+                prompt: prompt,
+                explanation: explanationResultText,
+            };
+            
+            updateProjectData({
+                code: newCode,
+                boardInfo: newBoardInfo,
+                versionHistory: [currentHistoryItem, ...(project?.versionHistory || [])],
             });
+            addLog('[AIDE] AI Visualizer and Summary updated.', 'success');
             
             return input;
         },
@@ -342,9 +345,11 @@ a.click();
         },
         visualizeCode: async (input) => {
             const { html } = await generateVisualExplanation(input);
-            updateProjectData({
-              versionHistory: [{...versionHistory[0], visualizerHtml: html}, ...versionHistory.slice(1)]
-            });
+            if (versionHistory.length > 0) {
+              updateProjectData({
+                versionHistory: [{...versionHistory[0], visualizerHtml: html}, ...versionHistory.slice(1)]
+              });
+            }
             setIsIntelligencePanelOpen(true);
             setActiveTab('visualizer');
             return { html };
@@ -400,7 +405,7 @@ a.click();
   const handleManualCompile = async () => {
     setIsGenerating(true);
     setCompilationLogs([]);
-    jobStateRef.current = { jobId: '', historyId: crypto.randomUUID(), statusPoller: undefined };
+    jobStateRef.current = { jobId: '', historyId: project?.versionHistory?.[0]?.id || crypto.randomUUID(), statusPoller: undefined };
     await executeTool({ toolRequest: { name: 'compileCode', input: {} } } as any, chatHistory);
   }
 
@@ -427,9 +432,24 @@ a.click();
     toast({ title: 'Downloaded', description: `Code snapshot downloaded.` });
   }
 
-  const handleDownloadBinary = async (buildId: string) => {
-    if (!buildId) return;
-    toast({ title: "Not implemented", description: "This will be implemented soon!"});
+  const handleDownloadBinary = async (buildId?: string) => {
+    if (!buildId) {
+        toast({ title: "Binary Not Found", description: "This version does not have a compiled binary.", variant: "destructive"});
+        return;
+    };
+    const job = versionHistory.find(v => v.buildId === buildId);
+    if(!job || !job.binary?.filename) {
+        toast({ title: "Binary Not Found", description: "Could not find the filename for this build.", variant: "destructive"});
+        return;
+    }
+    const downloadUrl = `${process.env.NEXT_PUBLIC_COMPILATION_API_URL}/api/download/${buildId}/${job.binary.filename}`;
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = job.binary.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast({ title: "Downloaded", description: `Binary ${job.binary.filename} downloaded.`});
   }
   
   const handleCodeChange = (newCode: string) => {

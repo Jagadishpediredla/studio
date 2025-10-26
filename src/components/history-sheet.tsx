@@ -22,7 +22,7 @@ interface HistorySheetProps {
   history: HistoryItem[];
   onRestore: (item: HistoryItem) => void;
   onDownloadCode: (code: string, timestamp: Date) => void;
-  onDownloadBinary: (buildId: string) => void;
+  onDownloadBinary: (buildId?: string) => void;
   isGenerating: boolean;
 }
 
@@ -64,7 +64,7 @@ export function HistorySheet({ isOpen, onOpenChange, history, onRestore, onDownl
                        <div className="flex gap-2 flex-wrap items-center">
                           <Badge variant="secondary">Board: {item.board.fqbn}</Badge>
                           {item.board.libraries.map(lib => <Badge key={lib} variant="outline">{lib}</Badge>)}
-                          {item.binary && (
+                          {item.binary && item.buildId && (
                             <Badge variant="default" className="bg-green-600 hover:bg-green-700">
                                <FileCode className="mr-1.5 h-3 w-3" />
                                {item.binary.filename}
@@ -84,7 +84,7 @@ export function HistorySheet({ isOpen, onOpenChange, history, onRestore, onDownl
                          <Download className="mr-2 h-4 w-4" />
                          Download Code
                        </Button>
-                       <Button size="sm" variant="secondary" onClick={() => onDownloadBinary(item.buildId!)} disabled={!item.buildId || isGenerating}>
+                       <Button size="sm" variant="secondary" onClick={() => onDownloadBinary(item.buildId)} disabled={!item.buildId || isGenerating}>
                          {isGenerating ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                          Download Binary
                        </Button>
