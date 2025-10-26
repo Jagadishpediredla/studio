@@ -23,6 +23,8 @@ import { HistorySheet } from '@/components/history-sheet';
 import { Loader2, Play } from 'lucide-react';
 import StatusIndicator from '@/components/status-indicator';
 import { Button } from '@/components/ui/button';
+import AppHeader from '@/components/app-header';
+import type { PipelineStatus } from '@/lib/types';
 
 export type StatusUpdate = {
     timestamp: string;
@@ -47,6 +49,13 @@ export default function AidePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [compilationLogs, setCompilationLogs] = useState<StatusUpdate[]>([]);
   const [isCompiling, setIsCompiling] = useState(false);
+  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({
+    serverCheck: 'pending',
+    codeGen: 'pending',
+    compile: 'pending',
+    upload: 'pending',
+    verify: 'pending',
+  });
 
   const { toast } = useToast();
   
@@ -129,6 +138,29 @@ export default function AidePage() {
         }
         return [...prev, newLog];
     });
+  };
+  
+  const updatePipeline = (step: keyof PipelineStatus, status: 'pending' | 'processing' | 'completed' | 'failed') => {
+    setPipelineStatus(prev => ({ ...prev, [step]: status }));
+  };
+  
+  const handleManualAction = (step: keyof Omit<PipelineStatus, 'codeGen'>) => {
+    // Skip serverCheck as it's not a manual action
+    if (step === 'serverCheck') return;
+    
+    updatePipeline(step, 'processing');
+    // In a real implementation, this would trigger the actual action
+    // For now, we'll simulate with a timeout
+    setTimeout(() => {
+      const success = Math.random() > 0.2; // 80% success rate
+      if (success) {
+        updatePipeline(step, 'completed');
+        toast({ title: 'Success', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step completed.` });
+      } else {
+        updatePipeline(step, 'failed');
+        toast({ title: 'Failed', description: `${step.charAt(0).toUpperCase() + step.slice(1)} step failed.`, variant: 'destructive' });
+      }
+    }, 2000 + Math.random() * 2000);
   };
   
   const handleFirmwareDownload = async (result: any) => {
@@ -491,40 +523,31 @@ export default function AidePage() {
       <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
         <NavRail onNavAction={handleNavAction} />
         <div className="flex-1 flex flex-col min-w-0 pl-14">
-          <header className="flex items-center justify-between p-3 border-b shrink-0">
-            <h1 className="text-lg font-headline font-bold text-foreground">{project.name}</h1>
-            <div className="flex items-center gap-4">
-              <StatusIndicator 
-                  isProcessing={isCompiling}
-                  statusMessage={lastLogMessage}
+          <AppHeader 
+            pipelineStatus={pipelineStatus}
+            compilationStatus={compilationLogs.map(log => log.message)}
+            onManualAction={handleManualAction}
+            onShowHistory={() => setIsHistoryOpen(true)}
+            className="col-span-3" 
+          />
+          <main className="flex-grow min-h-0 grid grid-cols-[1fr_1fr] grid-rows-[1fr] gap-4 p-4 overflow-hidden">
+            <div className="flex flex-col h-full min-h-0">
+              <AiControls
+                prompt={prompt}
+                setPrompt={setPrompt}
+                onSendMessage={handleSendMessage}
+                isGenerating={isGenerating || isCompiling}
+                chatHistory={chatHistory}
               />
-              <Button onClick={handleManualCompile} disabled={isGenerating || isCompiling}>
-                <Play className="mr-2 h-4 w-4"/>
-                Compile & Run
-              </Button>
             </div>
-          </header>
-          <main className="flex-grow min-h-0">
-            <ResizablePanelGroup direction="horizontal">
-              <ResizablePanel defaultSize={50} minSize={30}>
-                <AiControls
-                    prompt={prompt}
-                    setPrompt={setPrompt}
-                    onSendMessage={handleSendMessage}
-                    isGenerating={isGenerating || isCompiling}
-                    chatHistory={chatHistory}
-                />
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={50} minSize={30}>
-                <CodeEditorPanel
-                      code={code}
-                      onCodeChange={handleCodeChange}
-                      onDownloadCode={() => handleDownloadCode(code, new Date())}
-                      boardInfo={boardInfo}
-                  />
-              </ResizablePanel>
-            </ResizablePanelGroup>
+            <div className="flex flex-col h-full min-h-0">
+              <CodeEditorPanel
+                code={code}
+                onCodeChange={handleCodeChange}
+                onDownloadCode={() => handleDownloadCode(code, new Date())}
+                boardInfo={boardInfo}
+              />
+            </div>
           </main>
         </div>
         
