@@ -30,7 +30,19 @@ Existing Code:
 {{{code}}}
 \`\`\`
 
-Respond with the complete, updated code snippet, detected board type (if able to detect), and the required libraries (if any). Return the information as a valid JSON.`,
+Instructions:
+1. Generate or modify Arduino/ESP32 code based on the user's request
+2. Ensure the code is complete, functional, and follows Arduino best practices
+3. Include proper error handling and comments for complex sections
+4. If modifying existing code, preserve existing functionality unless specifically requested to change it
+5. Detect the appropriate board type (e.g., esp32:esp32:esp32, arduino:avr:uno) based on the code or request
+6. List any required libraries that need to be installed
+7. Return the information as a valid JSON object with the following structure:
+   {
+     "code": "complete Arduino code",
+     "board": "board type (e.g., esp32:esp32:esp32)",
+     "libraries": ["array of required library names"]
+   }`,
   config: {
         safetySettings: [
           {

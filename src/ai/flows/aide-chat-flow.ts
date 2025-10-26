@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -31,7 +30,7 @@ import {
 const compileCodeTool = ai.defineTool(
   {
     name: 'compileCode',
-    description: 'Compiles the provided Arduino code. This should be called when the user explicitly asks to compile, build, or run the code, or after fixing a compilation error.',
+    description: 'Compiles the provided Arduino code. This should be called when the user explicitly asks to compile, build, or run the code, or after fixing a compilation error. This tool will trigger the actual compilation process in the cloud.',
     inputSchema: z.object({
         code: z.string().describe('The complete Arduino code to compile.'),
         board: z.string().describe('The FQBN of the target board (e.g., esp32:esp32:esp32).'),
@@ -47,7 +46,7 @@ const compileCodeTool = ai.defineTool(
     // when it receives this tool call. We just return a confirmation here.
     return {
       success: true,
-      message: 'Compilation process initiated. The user interface will now handle the compilation and display the logs.',
+      message: 'Compilation process initiated. The user interface will now handle the compilation and display the logs in real-time.',
     };
   }
 );
@@ -67,7 +66,7 @@ const generateCodeTool = ai.defineTool(
 const analyzeCodeTool = ai.defineTool(
     {
         name: 'analyzeCode',
-        description: 'Analyzes the current code and provides a detailed, natural language explanation of its functionality, purpose, and how it works. Use this when the user asks to "explain the code", "what does this do?", or similar questions.',
+        description: 'Analyzes the current code and provides a detailed, natural language explanation of its functionality, purpose, and how it works. Use this when the user asks to "explain the code", "what does this do?", or similar questions. Provide a comprehensive analysis including code structure, logic flow, key functions, and potential improvements.',
         inputSchema: AnalyzeCodeForExplanationInputSchema,
         outputSchema: AnalyzeCodeForExplanationOutputSchema,
     },
@@ -79,7 +78,7 @@ const analyzeCodeTool = ai.defineTool(
 const visualizeCodeTool = ai.defineTool(
     {
         name: 'visualizeCode',
-        description: 'Generates a self-contained HTML document that visually explains the code with flowcharts and diagrams. Use this when the user asks for a "visual explanation", "diagram", or "flowchart" of the code.',
+        description: 'Generates a self-contained HTML document that visually explains the code with flowcharts and diagrams. Use this when the user asks for a "visual explanation", "diagram", or "flowchart" of the code. Create clear, interactive visualizations that help users understand the code structure and execution flow.',
         inputSchema: GenerateVisualExplanationInputSchema,
         outputSchema: GenerateVisualExplanationOutputSchema,
     },
@@ -125,6 +124,9 @@ const aideChatFlow = ai.defineFlow(
             - If the user asks for a "flowchart" or "visual explanation", use the \`visualizeCode\` tool.
             - If the user asks you to compile, build, deploy, or run the code, use the \`compileCode\` tool.
           - If the prompt contains a compilation error message, your primary goal is to fix the code. Use the \`generateCode\` tool to provide the corrected code, and then immediately call the \`compileCode\` tool to try building it again.
+          - Be proactive in suggesting improvements to the code when you see potential issues.
+          - Provide detailed explanations and reasoning for your suggestions.
+          - When generating code, ensure it follows Arduino/ESP32 best practices and includes proper error handling.
           - For general chat, just respond with a helpful message.
 
           This is the current code in the editor:
@@ -153,5 +155,3 @@ const aideChatFlow = ai.defineFlow(
 export async function aideChat(input: AideChatInput) {
     return await aideChatFlow(input);
 }
-
-    

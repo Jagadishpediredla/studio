@@ -216,7 +216,7 @@ export default function AidePage() {
 
     try {
       const response: GenerateResponse = await aideChat({
-        history: chatHistory.map(m => ({ role: m.role, content: m.content as string })),
+        history: chatHistory.map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) })),
         code,
         prompt: currentPrompt,
       });
@@ -242,6 +242,17 @@ export default function AidePage() {
         else if (typeof content === 'string') {
           assistantResponseText = content;
         }
+        // If content is an object (fallback)
+        else if (typeof content === 'object' && content !== null) {
+          // Try to extract text from the object
+          const contentObj = content as Record<string, any>;
+          if ('text' in contentObj && typeof contentObj.text === 'string') {
+            assistantResponseText = contentObj.text;
+          } else {
+            // Convert object to string as fallback
+            assistantResponseText = JSON.stringify(content);
+          }
+        }
         
         if (assistantResponseText) {
           newChatHistory = [...newChatHistory, { role: 'assistant' as const, content: assistantResponseText }];
@@ -250,8 +261,8 @@ export default function AidePage() {
       }
 
     } catch (error: any) {
-      console.error(error);
-      const message = error.message || 'An error occurred while talking to the AI.';
+      console.error('AI Error:', error);
+      const message = error.message || error.toString() || 'An error occurred while talking to the AI.';
       const newHistory = [...chatHistory, userMessage, { role: 'assistant' as const, content: `I ran into an error: ${message}` }];
       updateProjectData({ chatHistory: newHistory });
       toast({ title: 'AI Error', description: message, variant: 'destructive' });
