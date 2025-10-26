@@ -20,7 +20,7 @@ export default function AppHeader({ pipelineStatus, compilationStatus, onManualA
   
   return (
     <header className={cn("flex flex-col gap-4 p-4 rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props}>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
                 <svg
@@ -78,14 +78,15 @@ export default function AppHeader({ pipelineStatus, compilationStatus, onManualA
                 <h1 className="text-xl font-headline font-bold">AIoT Studio</h1>
             </div>
         </div>
-        <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onShowHistory}>
+        <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={onShowHistory} size="sm" className="whitespace-nowrap">
                 <History className="mr-2 h-4 w-4" />
-                Version History
+                <span className="hidden sm:inline">Version History</span>
+                <span className="sm:hidden">History</span>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" disabled={isActionInProgress}>
+                <Button variant="outline" disabled={isActionInProgress} size="sm">
                   Actions <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>

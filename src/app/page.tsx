@@ -90,16 +90,16 @@ export default function HomePage() {
   const sortedProjects = [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   return (
-    <div className="h-screen w-screen bg-background text-foreground flex flex-col items-center p-4 sm:p-8 font-body overflow-y-auto">
+    <div className="h-screen w-screen bg-background text-foreground flex flex-col items-center p-4 sm:p-6 md:p-8 font-body overflow-y-auto">
       {/* Hero Section */}
-      <div className="w-full max-w-6xl mx-auto mb-16 text-center">
-        <div className="flex justify-center mb-6">
+      <div className="w-full max-w-6xl mx-auto mb-12 sm:mb-16 text-center">
+        <div className="flex justify-center mb-4 sm:mb-6">
           <div className="relative">
             <div className="absolute -inset-4 bg-primary/20 rounded-full blur-lg animate-pulse"></div>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 256 256"
-              className="h-24 w-24 text-primary relative"
+              className="h-16 w-16 sm:h-24 sm:w-24 text-primary relative"
             >
               <rect width="256" height="256" fill="none" />
               <path d="M88,140a7.8,7.8,0,0,1-8,8,12,12,0,0,1-12-12,8,8,0,0,1,16,0,12,12,0,0,1-12,12,7.8,7.8,0,0,1-8-8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16" />
@@ -111,20 +111,20 @@ export default function HomePage() {
           </div>
         </div>
         
-        <h1 className="text-5xl md:text-7xl font-headline font-bold tracking-tighter bg-gradient-to-r from-primary via-primary/80 to-primary bg-clip-text text-transparent mb-6">
+        <h1 className="text-4xl sm:text-5xl md:text-7xl font-headline font-bold tracking-tighter bg-gradient-to-r from-primary via-primary/80 to-primary bg-clip-text text-transparent mb-4 sm:mb-6">
           AIoT Studio
         </h1>
         
-        <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto mb-10">
+        <p className="text-base sm:text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto mb-6 sm:mb-10">
           The next-generation agentic development environment for IoT and embedded systems. <br />
           <span className="text-primary font-semibold">AI-powered</span> coding, <span className="text-primary font-semibold">cloud-compiled</span> firmware, and <span className="text-primary font-semibold">seamless</span> deployment.
         </p>
         
-        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-12 sm:mb-16">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="lg" className="text-lg h-14 px-8 rounded-lg bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70">
-                <Zap className="mr-2 h-5 w-5" />
+              <Button size="lg" className="text-base sm:text-lg h-12 sm:h-14 px-6 sm:px-8 rounded-lg bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70">
+                <Zap className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                 Start New Project
               </Button>
             </DialogTrigger>
@@ -153,9 +153,9 @@ export default function HomePage() {
             </DialogContent>
           </Dialog>
           
-          <Button size="lg" variant="outline" className="text-lg h-14 px-8 rounded-lg" asChild>
+          <Button size="lg" variant="outline" className="text-base sm:text-lg h-12 sm:h-14 px-6 sm:px-8 rounded-lg" asChild>
             <Link href="/ota">
-              <Wifi className="mr-2 h-5 w-5" />
+              <Wifi className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
               OTA Update
             </Link>
           </Button>
@@ -163,17 +163,17 @@ export default function HomePage() {
       </div>
       
       {/* Features Section */}
-      <div className="w-full max-w-6xl mx-auto mb-16">
-        <h2 className="text-3xl font-headline font-bold text-center mb-12">Powerful Features for IoT Development</h2>
+      <div className="w-full max-w-6xl mx-auto mb-12 sm:mb-16">
+        <h2 className="text-2xl sm:text-3xl font-headline font-bold text-center mb-8 sm:mb-12">Powerful Features for IoT Development</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-12 sm:mb-16">
           <Card className="bg-card/50 hover:bg-card/80 transition-all duration-300 border-primary/20">
             <CardHeader>
-              <Brain className="h-12 w-12 text-primary mb-4" />
-              <CardTitle>AI Pair Programming</CardTitle>
+              <Brain className="h-8 w-8 sm:h-12 sm:w-12 text-primary mb-3 sm:mb-4" />
+              <CardTitle className="text-lg sm:text-xl">AI Pair Programming</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">
+              <p className="text-sm sm:text-base text-muted-foreground">
                 Work alongside an AI assistant that understands embedded systems. Get code suggestions, explanations, and debugging help in real-time.
               </p>
             </CardContent>
@@ -181,11 +181,11 @@ export default function HomePage() {
           
           <Card className="bg-card/50 hover:bg-card/80 transition-all duration-300 border-primary/20">
             <CardHeader>
-              <Cloud className="h-12 w-12 text-primary mb-4" />
-              <CardTitle>Cloud Compilation</CardTitle>
+              <Cloud className="h-8 w-8 sm:h-12 sm:w-12 text-primary mb-3 sm:mb-4" />
+              <CardTitle className="text-lg sm:text-xl">Cloud Compilation</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">
+              <p className="text-sm sm:text-base text-muted-foreground">
                 Compile your firmware in the cloud with zero setup. Support for ESP32, Arduino, and other popular platforms.
               </p>
             </CardContent>
@@ -193,11 +193,11 @@ export default function HomePage() {
           
           <Card className="bg-card/50 hover:bg-card/80 transition-all duration-300 border-primary/20">
             <CardHeader>
-              <Cpu className="h-12 w-12 text-primary mb-4" />
-              <CardTitle>Smart Deployment</CardTitle>
+              <Cpu className="h-8 w-8 sm:h-12 sm:w-12 text-primary mb-3 sm:mb-4" />
+              <CardTitle className="text-lg sm:text-xl">Smart Deployment</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">
+              <p className="text-sm sm:text-base text-muted-foreground">
                 Deploy firmware over-the-air with confidence. Monitor deployment status and rollback if needed.
               </p>
             </CardContent>
@@ -206,11 +206,11 @@ export default function HomePage() {
       </div>
       
       {/* Recent Projects Section */}
-      <div className="w-full max-w-6xl mx-auto mb-16">
-        <div className="flex justify-between items-center mb-8">
+      <div className="w-full max-w-6xl mx-auto mb-12 sm:mb-16">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
           <div>
-            <h2 className="text-3xl font-headline font-bold">Recent Projects</h2>
-            <p className="text-muted-foreground">Continue your work from where you left off</p>
+            <h2 className="text-2xl sm:text-3xl font-headline font-bold">Recent Projects</h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Continue your work from where you left off</p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -246,24 +246,24 @@ export default function HomePage() {
         
         <AlertDialog>
           <CardContent className="p-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {isLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="p-6 border rounded-lg h-40">
-                    <Skeleton className="h-6 w-3/4 mb-4" />
-                    <Skeleton className="h-4 w-1/2 mb-6" />
+                  <div key={i} className="p-4 sm:p-6 border rounded-lg h-32 sm:h-40">
+                    <Skeleton className="h-5 sm:h-6 w-3/4 mb-3 sm:mb-4" />
+                    <Skeleton className="h-3 sm:h-4 w-1/2 mb-4 sm:mb-6" />
                     <div className="flex justify-end">
-                      <Skeleton className="h-4 w-1/4" />
+                      <Skeleton className="h-3 sm:h-4 w-1/4" />
                     </div>
                   </div>
                 ))
               ) : sortedProjects.length > 0 ? sortedProjects.map(project => (
-                <div key={project.id} className="p-6 border rounded-lg hover:bg-muted/50 transition-colors group h-full flex flex-col justify-between bg-card/30 hover:bg-card/50">
-                  <div className="flex justify-between items-start mb-4">
+                <div key={project.id} className="p-4 sm:p-6 border rounded-lg hover:bg-muted/50 transition-colors group h-full flex flex-col justify-between bg-card/30 hover:bg-card/50">
+                  <div className="flex justify-between items-start mb-3 sm:mb-4">
                     <Link href={`/aide/${project.id}`} className="flex-grow">
                       <div className="font-semibold flex items-center gap-2 mb-2">
-                        <Folder className="text-primary"/> 
-                        {project.name}
+                        <Folder className="text-primary h-4 w-4 sm:h-5 sm:w-5"/> 
+                        <span className="text-sm sm:text-base">{project.name}</span>
                       </div>
                     </Link>
                     <AlertDialogTrigger asChild>
@@ -273,25 +273,25 @@ export default function HomePage() {
                     </AlertDialogTrigger>
                   </div>
                   <Link href={`/aide/${project.id}`} passHref className="flex flex-col justify-end h-full">
-                    <p className="text-sm text-muted-foreground flex items-center gap-2 mb-4">
-                      <Clock className="h-4 w-4"/> 
+                    <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 mb-3 sm:mb-4">
+                      <Clock className="h-3 w-3 sm:h-4 sm:w-4"/> 
                       Last modified: {new Date(project.updatedAt).toLocaleDateString()}
                     </p>
                     <div className="flex justify-end items-center">
-                      <span className="text-sm text-primary group-hover:underline flex items-center">
+                      <span className="text-xs sm:text-sm text-primary group-hover:underline flex items-center">
                         Open Workspace
-                        <ArrowRight className="h-4 w-4 ml-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 ml-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                       </span>
                     </div>
                   </Link>
                 </div>
               )) : (
-                <div className="col-span-full text-center py-12">
-                  <Folder className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">No projects yet</h3>
-                  <p className="text-muted-foreground mb-6">Create your first project to get started with AIoT Studio</p>
+                <div className="col-span-full text-center py-8 sm:py-12">
+                  <Folder className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-3 sm:mb-4" />
+                  <h3 className="text-lg sm:text-xl font-semibold mb-2">No projects yet</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">Create your first project to get started with AIoT Studio</p>
                   <DialogTrigger asChild>
-                    <Button>
+                    <Button size="sm" className="sm:h-10">
                       <Plus className="mr-2 h-4 w-4" />
                       Create Your First Project
                     </Button>

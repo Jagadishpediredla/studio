@@ -522,7 +522,7 @@ export default function AidePage() {
     <TooltipProvider>
       <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
         <NavRail onNavAction={handleNavAction} />
-        <div className="flex-1 flex flex-col min-w-0 pl-14">
+        <div className="flex-1 flex flex-col min-w-0 sm:pl-14 pb-16 sm:pb-0">
           <AppHeader 
             pipelineStatus={pipelineStatus}
             compilationStatus={compilationLogs.map(log => log.message)}
@@ -530,7 +530,7 @@ export default function AidePage() {
             onShowHistory={() => setIsHistoryOpen(true)}
             className="col-span-3" 
           />
-          <main className="flex-grow min-h-0 grid grid-cols-[1fr_1fr] grid-rows-[1fr] gap-4 p-4 overflow-hidden">
+          <main className="flex-grow min-h-0 grid grid-cols-1 md:grid-cols-2 grid-rows-[1fr] gap-4 p-4 overflow-hidden">
             <div className="flex flex-col h-full min-h-0">
               <AiControls
                 prompt={prompt}

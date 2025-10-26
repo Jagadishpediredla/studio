@@ -40,7 +40,7 @@ export default function DeploymentPipeline({ status, compilationStatus = [] }: D
   return (
     <TooltipProvider>
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 rounded-lg border bg-background p-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background p-2">
             {steps.map((stepKey, index) => {
             const stepKeyTyped = stepKey as keyof typeof stepConfig;
             const stepStatus = status[stepKeyTyped];
@@ -52,10 +52,10 @@ export default function DeploymentPipeline({ status, compilationStatus = [] }: D
                 <React.Fragment key={stepKey}>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2 cursor-default">
-                        <StepIcon className="h-5 w-5 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">{stepConfig[stepKey].label}</span>
-                        <StatusIcon className={cn("h-5 w-5", color, animation)} />
+                    <div className="flex items-center gap-1 sm:gap-2 cursor-default">
+                        <StepIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        <span className="text-xs sm:text-sm font-medium text-muted-foreground">{stepConfig[stepKey].label}</span>
+                        <StatusIcon className={cn("h-4 w-4 sm:h-5 sm:w-5", color, animation)} />
                     </div>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -63,7 +63,7 @@ export default function DeploymentPipeline({ status, compilationStatus = [] }: D
                     </TooltipContent>
                 </Tooltip>
                 {index < steps.length - 1 && (
-                    <ChevronRight className="h-5 w-5 text-border" />
+                    <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 text-border" />
                 )}
                 </React.Fragment>
             );
@@ -74,12 +74,12 @@ export default function DeploymentPipeline({ status, compilationStatus = [] }: D
             <div className="bg-black/50 rounded-lg p-2 max-h-32">
                  <div className='flex items-center gap-2 text-sm font-medium text-muted-foreground p-1'>
                     <Terminal className="h-4 w-4" />
-                    <span>Compilation Status</span>
+                    <span className="text-xs sm:text-sm">Compilation Status</span>
                  </div>
                  <ScrollArea className="h-20 w-full rounded-md border border-input bg-background/50 p-2">
                     <div ref={scrollRef} className="text-xs font-mono text-muted-foreground flex flex-col gap-1">
                         {compilationStatus.map((line, index) => (
-                            <p key={index}>{`> ${line}`}</p>
+                            <p key={index} className="truncate">{`> ${line}`}</p>
                         ))}
                     </div>
                 </ScrollArea>
