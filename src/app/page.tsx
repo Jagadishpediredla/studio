@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Folder, Clock, ArrowRight, Loader2 } from 'lucide-react';
-import { getProjects, createProject } from '@/app/actions';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Plus, Folder, Clock, ArrowRight, Loader2, Trash2 } from 'lucide-react';
+import { getProjects, createProject, deleteProject } from '@/app/actions';
 import { type Project } from '@/lib/types';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +22,7 @@ export default function HomePage() {
   const [newProjectName, setNewProjectName] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -29,7 +31,6 @@ export default function HomePage() {
       setIsLoading(true);
       const result = await getProjects();
       if (result.success && result.projects) {
-        // Parse date strings into Date objects
         const parsedProjects = result.projects.map(p => ({
             ...p,
             createdAt: new Date(p.createdAt),
@@ -68,6 +69,23 @@ export default function HomePage() {
         });
     }
   };
+
+  const handleDeleteProject = async () => {
+    if (!projectToDelete) return;
+    
+    const result = await deleteProject(projectToDelete.id);
+    if (result.success) {
+        setProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
+        toast({ title: "Project Deleted", description: `Project "${projectToDelete.name}" was successfully deleted.`});
+    } else {
+        toast({
+            title: "Error deleting project",
+            description: result.error || "An unknown error occurred.",
+            variant: "destructive",
+        });
+    }
+    setProjectToDelete(null);
+  }
   
   const sortedProjects = [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
@@ -126,51 +144,72 @@ export default function HomePage() {
           </DialogContent>
         </Dialog>
         
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Projects</CardTitle>
-            <CardDescription>Select a project to open its workspace.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="p-4 border rounded-lg h-36">
-                        <Skeleton className="h-5 w-3/4 mb-4" />
-                        <Skeleton className="h-4 w-1/2 mb-6" />
-                        <div className="flex justify-end">
-                            <Skeleton className="h-4 w-1/4" />
-                        </div>
-                    </div>
-                ))
-              ) : sortedProjects.length > 0 ? sortedProjects.map(project => (
-                <Link href={`/aide/${project.id}`} key={project.id} passHref>
-                  <div className="p-4 border rounded-lg hover:bg-muted hover:border-primary transition-all cursor-pointer group h-full flex flex-col justify-between">
-                    <div>
-                      <div className="font-semibold flex items-center gap-2 mb-2">
-                        <Folder className="text-primary"/> 
-                        {project.name}
+        <AlertDialog>
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Projects</CardTitle>
+              <CardDescription>Select a project to open its workspace or delete it.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {isLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="p-4 border rounded-lg h-36">
+                          <Skeleton className="h-5 w-3/4 mb-4" />
+                          <Skeleton className="h-4 w-1/2 mb-6" />
+                          <div className="flex justify-end">
+                              <Skeleton className="h-4 w-1/4" />
+                          </div>
                       </div>
-                      <p className="text-sm text-muted-foreground flex items-center gap-2">
-                        <Clock className="h-4 w-4"/> 
-                        Last modified: {new Date(project.updatedAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex justify-end items-center mt-4">
-                        <span className="text-sm text-primary group-hover:underline">Open Workspace</span>
-                        <ArrowRight className="h-4 w-4 ml-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                  ))
+                ) : sortedProjects.length > 0 ? sortedProjects.map(project => (
+                  <div key={project.id} className="p-4 border rounded-lg hover:bg-muted transition-colors group h-full flex flex-col justify-between">
+                    <Link href={`/aide/${project.id}`} passHref className="flex flex-col justify-between h-full">
+                        <div>
+                          <div className="font-semibold flex items-center gap-2 mb-2">
+                            <Folder className="text-primary"/> 
+                            {project.name}
+                          </div>
+                          <p className="text-sm text-muted-foreground flex items-center gap-2">
+                            <Clock className="h-4 w-4"/> 
+                            Last modified: {new Date(project.updatedAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex justify-end items-center mt-4">
+                            <span className="text-sm text-primary group-hover:underline">Open Workspace</span>
+                            <ArrowRight className="h-4 w-4 ml-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                    </Link>
+                    <div className="flex justify-end -mt-8">
+                        <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setProjectToDelete(project); }}>
+                                <Trash2 className="h-4 w-4 text-destructive/50 hover:text-destructive" />
+                            </Button>
+                        </AlertDialogTrigger>
                     </div>
                   </div>
-                </Link>
-              )) : (
-                <p className="text-muted-foreground col-span-full text-center py-8">No projects found. Create one to get started!</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                )) : (
+                  <p className="text-muted-foreground col-span-full text-center py-8">No projects found. Create one to get started!</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the project <span className="font-bold">"{projectToDelete?.name}"</span> and all of its associated data.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setProjectToDelete(null)}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                    Delete Project
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );
 }
-
-    

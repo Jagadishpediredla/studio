@@ -3,7 +3,7 @@
 
 import type { Project, BuildInfo } from '@/lib/types';
 import { database } from '@/lib/firebase';
-import { ref, get, set, push } from 'firebase/database';
+import { ref, get, set, push, remove } from 'firebase/database';
 
 const CLIENT_USER_ID = 'user_123';
 const COMPILATION_API_URL = process.env.COMPILATION_API_URL;
@@ -134,6 +134,17 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
         console.error(`Failed to update project ${id}: ${error.message}`, error);
         return { success: false, error: `Failed to update project: ${error.message}` };
     }
+}
+
+export async function deleteProject(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const projectRef = ref(database, `projects/${id}`);
+    await remove(projectRef);
+    return { success: true };
+  } catch (error: any) {
+    console.error(`Failed to delete project ${id}: ${error.message}`, error);
+    return { success: false, error: `Failed to delete project: ${error.message}` };
+  }
 }
 
 
