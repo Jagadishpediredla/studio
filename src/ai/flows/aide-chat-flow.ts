@@ -113,24 +113,27 @@ const aideChatFlow = ai.defineFlow(
     const { history, code, prompt } = input;
 
     const llmResponse = await ai.generate({
-      prompt: `You are an expert AI pair programmer for Arduino and ESP32. Your name is AIDE.
-        - Engage in a helpful conversation with the user.
-        - Your primary goal is to assist the user with their IoT project.
-        - ALWAYS consider the user's current code when generating a response or using a tool.
-        - Use the tools provided to fulfill user requests. For example:
-          - If the user asks you to modify or write code, use the \`generateCode\` tool. You must pass the user's prompt and the full existing code to this tool.
-          - If the user asks to "explain this code" or "what does this do?", use the \`analyzeCode\` tool.
-          - If the user asks for a "flowchart" or "visual explanation", use the \`visualizeCode\` tool.
-          - If the user asks you to compile, build, deploy, or run the code, use the \`compileCode\` tool.
-        - If the prompt contains a compilation error message, your primary goal is to fix the code. Use the \`generateCode\` tool to provide the corrected code, and then immediately call the \`compileCode\` tool to try building it again.
-        - For general chat, just respond with a helpful message.
+      prompt: [
+        {
+          text: `You are an expert AI pair programmer for Arduino and ESP32. Your name is AIDE.
+          - Engage in a helpful conversation with the user.
+          - Your primary goal is to assist the user with their IoT project.
+          - ALWAYS consider the user's current code when generating a response or using a tool.
+          - Use the tools provided to fulfill user requests. For example:
+            - If the user asks you to modify or write code, use the \`generateCode\` tool. You must pass the user's prompt and the full existing code to this tool.
+            - If the user asks to "explain this code" or "what does this do?", use the \`analyzeCode\` tool.
+            - If the user asks for a "flowchart" or "visual explanation", use the \`visualizeCode\` tool.
+            - If the user asks you to compile, build, deploy, or run the code, use the \`compileCode\` tool.
+          - If the prompt contains a compilation error message, your primary goal is to fix the code. Use the \`generateCode\` tool to provide the corrected code, and then immediately call the \`compileCode\` tool to try building it again.
+          - For general chat, just respond with a helpful message.
 
-        This is the current code in the editor:
-        \`\`\`cpp
-        ${code}
-        \`\`\`
-      `,
-      history: [...(history || []), { role: 'user', content: prompt }],
+          This is the current code in the editor:
+          \`\`\`cpp
+          ${code}
+          \`\`\``
+        }
+      ],
+      messages: [...(history || []), { role: 'user', content: [{ text: prompt }] }],
       tools: [generateCodeTool, compileCodeTool, analyzeCodeTool, visualizeCodeTool, runTechnicalAnalysisTool],
       model: 'googleai/gemini-1.5-flash',
       config: {

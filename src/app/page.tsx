@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Folder, Clock, ArrowRight, Loader2, Trash2, Wifi, Zap, Cpu, Cloud, Brain } from 'lucide-react';
 import { getProjects, createProject, deleteProject } from '@/app/actions';
@@ -36,7 +36,7 @@ export default function HomePage() {
             createdAt: new Date(p.createdAt),
             updatedAt: new Date(p.updatedAt),
         }));
-        setProjects(parsedProjects as Project[]);
+        setProjects(parsedProjects as unknown as Project[]);
       } else {
         toast({
             title: "Error loading projects",

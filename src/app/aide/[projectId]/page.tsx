@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { aideChat } from '@/ai/flows/aide-chat-flow.ts';
+import { aideChat } from '@/ai/flows/aide-chat-flow';
 import { getProject, updateProject, compileCode, getJobStatus } from '@/app/actions';
 import type { HistoryItem, ChatMessage, Project } from '@/lib/types';
 import { type ToolRequestPart, type GenerateResponse } from 'genkit';
@@ -188,27 +188,38 @@ export default function AidePage() {
         prompt: currentPrompt,
       });
 
-      if (response.choices[0].message.content) {
+      // Handle the Genkit response
+      if (response && response.message) {
+        const content = response.message.content;
         let assistantResponseText = '';
-        for (const part of response.choices[0].message.content) {
+        
+        // If content is an array of parts
+        if (Array.isArray(content)) {
+          for (const part of content) {
             if (part.text) {
-                assistantResponseText += part.text;
+              assistantResponseText += part.text;
             }
             if (part.toolRequest) {
-                await executeTool(part, newChatHistory); 
-                assistantResponseText = ''; // Clear text if tool is used
+              await executeTool(part, newChatHistory); 
+              assistantResponseText = ''; // Clear text if tool is used
             }
+          }
+        } 
+        // If content is a string
+        else if (typeof content === 'string') {
+          assistantResponseText = content;
         }
+        
         if (assistantResponseText) {
-            newChatHistory = [...newChatHistory, { role: 'assistant', content: assistantResponseText }];
-            updateProjectData({ chatHistory: newChatHistory });
+          newChatHistory = [...newChatHistory, { role: 'assistant' as const, content: assistantResponseText }];
+          updateProjectData({ chatHistory: newChatHistory });
         }
       }
 
     } catch (error: any) {
       console.error(error);
       const message = error.message || 'An error occurred while talking to the AI.';
-      const newHistory = [...chatHistory, userMessage, { role: 'assistant', content: `I ran into an error: ${message}` }];
+      const newHistory = [...chatHistory, userMessage, { role: 'assistant' as const, content: `I ran into an error: ${message}` }];
       updateProjectData({ chatHistory: newHistory });
       toast({ title: 'AI Error', description: message, variant: 'destructive' });
     } finally {
@@ -382,19 +393,19 @@ export default function AidePage() {
             }
             
             if (assistantMessageContent) {
-                 newHistory = [...newHistory, { role: 'assistant', content: assistantMessageContent }];
+                 newHistory = [...newHistory, { role: 'assistant' as const, content: assistantMessageContent }];
                  updateProjectData({ chatHistory: newHistory });
             }
         } catch (error: any) {
             const errorMessage = `Error executing tool ${toolName}: ${error.message}`;
             addLog(`[AIDE] ${errorMessage}`, 'error');
-            newHistory = [...newHistory, { role: 'assistant', content: errorMessage }];
+            newHistory = [...newHistory, { role: 'assistant' as const, content: errorMessage }];
             updateProjectData({ chatHistory: newHistory });
         }
     } else {
         const errorMessage = `Unknown tool: ${toolName}`;
         addLog(`[AIDE] ${errorMessage}`, 'error');
-        newHistory = [...newHistory, { role: 'assistant', content: errorMessage }];
+        newHistory = [...newHistory, { role: 'assistant' as const, content: errorMessage }];
         updateProjectData({ chatHistory: newHistory });
     }
   };

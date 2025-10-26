@@ -16,7 +16,7 @@ const stepConfig = {
   compile: { label: "Compile", icon: Cog },
   upload: { label: "Upload", icon: UploadCloud },
   verify: { label: "Verify", icon: ShieldCheck },
-};
+} as const;
 
 const statusConfig: { [key in PipelineStep]: { icon: React.ElementType, color: string, animation?: string } } = {
   pending: { icon: CheckCircle2, color: "text-muted-foreground/50" },
@@ -32,9 +32,11 @@ export default function DeploymentPipeline({ status }: DeploymentPipelineProps) 
     <TooltipProvider>
         <div className="flex items-center gap-2 rounded-lg border bg-background p-2">
             {steps.map((stepKey, index) => {
-            const stepStatus = status[stepKey];
-            const { icon: StepIcon } = stepConfig[stepKey];
-            const { icon: StatusIcon, color, animation } = statusConfig[stepStatus];
+            const stepKeyTyped = stepKey as keyof typeof stepConfig;
+            const stepStatus = status[stepKeyTyped];
+            const { icon: StepIcon } = stepConfig[stepKeyTyped];
+            const statusKeyTyped = stepStatus as keyof typeof statusConfig;
+            const { icon: StatusIcon, color, animation } = statusConfig[statusKeyTyped];
 
             return (
                 <React.Fragment key={stepKey}>

@@ -133,7 +133,8 @@ export async function updateProject(id: string, updates: Partial<Omit<Project, '
             const historyMap = new Map(existingData.versionHistory.map((v: any) => [v.id, v]));
             updates.versionHistory.forEach((v: any) => {
                 if(historyMap.has(v.id)) {
-                    historyMap.set(v.id, { ...historyMap.get(v.id), ...v });
+                    const existing = historyMap.get(v.id);
+                    historyMap.set(v.id, Object.assign({}, existing, v));
                 } else {
                     historyMap.set(v.id, v);
                 }

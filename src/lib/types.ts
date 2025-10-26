@@ -100,6 +100,16 @@ export interface TimelineEvent {
     message: string;
 }
 
+export type PipelineStep = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface PipelineStatus {
+  serverCheck: PipelineStep;
+  codeGen: PipelineStep;
+  compile: PipelineStep;
+  upload: PipelineStep;
+  verify: PipelineStep;
+}
+
 export interface Project {
   id: string;
   name: string;
