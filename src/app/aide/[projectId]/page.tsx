@@ -6,7 +6,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { aideChat } from '@/ai/flows/aide-chat-flow.ts';
 import { getProject, updateProject, compileCode, getJobStatus } from '@/app/actions';
-import type { HistoryItem, ChatMessage, Project, BuildInfo } from '@/lib/types';
+import type { HistoryItem, ChatMessage, Project } from '@/lib/types';
 import { type ToolRequestPart, type GenerateResponse } from 'genkit';
 import { analyzeCodeForExplanation } from '@/ai/flows/analyze-code-for-explanation';
 import { generateVisualExplanation } from '@/ai/flows/generate-visual-explanation';
@@ -20,8 +20,9 @@ import CodeEditorPanel from '@/components/code-editor-panel';
 import IntelligencePanel from '@/components/intelligence-panel';
 import { useToast } from '@/hooks/use-toast';
 import { HistorySheet } from '@/components/history-sheet';
-import { Loader2, BrainCircuit, Terminal } from 'lucide-react';
+import { Loader2, Play } from 'lucide-react';
 import StatusIndicator from '@/components/status-indicator';
+import { Button } from '@/components/ui/button';
 
 export type StatusUpdate = {
     timestamp: string;
@@ -181,7 +182,7 @@ export default function AidePage() {
     setIsGenerating(true);
 
     try {
-      const response: GenerateResponse = await aideChat({
+      const response = await aideChat({
         history: chatHistory.map(m => ({ role: m.role, content: m.content as string })),
         code,
         prompt: currentPrompt,
@@ -267,7 +268,7 @@ export default function AidePage() {
         }
     }, 2000);
 
-  }, [cleanupPoller, handleSendMessage, toast, updateProjectData]);
+  }, [cleanupPoller, handleSendMessage, toast]);
   
 
   const executeTool = async (toolRequest: ToolRequestPart, currentChatHistory: ChatMessage[]) => {
@@ -471,36 +472,43 @@ export default function AidePage() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
+      <div className="h-screen w-screen bg-background text-foreground flex flex-col overflow-hidden">
         <NavRail onNavAction={handleNavAction} />
-        <main className="flex-grow flex min-h-0">
-           <ResizablePanelGroup direction="horizontal">
-            <ResizablePanel defaultSize={50} minSize={30}>
-              <AiControls
-                  projectName={project.name}
-                  prompt={prompt}
-                  setPrompt={setPrompt}
-                  onSendMessage={handleSendMessage}
-                  isGenerating={isGenerating || isCompiling}
-                  chatHistory={chatHistory}
-                  onManualCompile={handleManualCompile}
-                  statusIndicator={
-                    <StatusIndicator 
-                        isProcessing={isCompiling}
-                        statusMessage={lastLogMessage}
-                    />
-                  }
+        <main className="flex-grow flex flex-col min-h-0 pl-14">
+          <header className="flex items-center justify-between p-3 border-b shrink-0">
+            <h1 className="text-lg font-headline font-bold text-foreground">{project.name}</h1>
+            <div className="flex items-center gap-4">
+              <StatusIndicator 
+                  isProcessing={isCompiling}
+                  statusMessage={lastLogMessage}
               />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={50} minSize={30}>
-               <CodeEditorPanel
-                    code={code}
-                    onCodeChange={handleCodeChange}
-                    boardInfo={boardInfo}
+              <Button onClick={handleManualCompile} disabled={isGenerating || isCompiling}>
+                <Play className="mr-2 h-4 w-4"/>
+                Compile & Run
+              </Button>
+            </div>
+          </header>
+          <div className="flex-grow min-h-0">
+            <ResizablePanelGroup direction="horizontal">
+              <ResizablePanel defaultSize={50} minSize={30}>
+                <AiControls
+                    prompt={prompt}
+                    setPrompt={setPrompt}
+                    onSendMessage={handleSendMessage}
+                    isGenerating={isGenerating || isCompiling}
+                    chatHistory={chatHistory}
                 />
-            </ResizablePanel>
-          </ResizablePanelGroup>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={50} minSize={30}>
+                <CodeEditorPanel
+                      code={code}
+                      onCodeChange={handleCodeChange}
+                      boardInfo={boardInfo}
+                  />
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </div>
         </main>
         
         <HistorySheet 
