@@ -6,7 +6,7 @@ import { database } from '@/lib/firebase';
 import { ref, get, set, push, remove } from 'firebase/database';
 
 const CLIENT_USER_ID = 'user_123';
-const COMPILATION_API_URL = process.env.COMPILATION_API_URL;
+const COMPILATION_API_URL = process.env.COMPILATION_API_URL || 'http://35.206.79.23:3000';
 
 // --- Project Actions ---
 
@@ -189,6 +189,35 @@ export async function getJobStatus(jobId: string) {
         return { success: false, error: error.message };
     }
 }
+
+export async function getJobDetails(jobId: string) {
+    try {
+        const response = await fetch(`${COMPILATION_API_URL}/api/job/${jobId}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || `Failed to get details for job ${jobId}`);
+        }
+        
+        return { success: true, job: data };
+    } catch(error: any) {
+        console.error(`[COMPILER] Job Details Error for ${jobId}:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function getJobs(limit = 50, startAfter?: string, userId?: string) {
+    try {
+        // This is a mock implementation as the new service doesn't have a multi-job endpoint
+        // For now, we return an empty list to avoid breaking the UI.
+        // A real implementation would query a jobs endpoint on the new service.
+        return { success: true, jobs: [], statistics: { totalJobs: 0, completedJobs: 0, failedJobs: 0, averageDuration: 0 }};
+    } catch(error: any) {
+        console.error(`[COMPILER] Get Jobs Error:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
 
 // --- Old Firebase compilation actions are now removed ---
 
